@@ -9,7 +9,7 @@ import { createNetworkConfig, SuiClientProvider, WalletProvider } from '@mysten/
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactNode } from 'react';
 
-// Configure Sui network
+// Configure Sui network - using official testnet RPC
 const { networkConfig } = createNetworkConfig({
   testnet: { 
     url: 'https://fullnode.testnet.sui.io:443',
