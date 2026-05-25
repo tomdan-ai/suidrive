@@ -24,7 +24,7 @@ export class WalrusClient {
       const epochs = 5; // Store for 5 epochs
       
       // Upload file directly to Walrus publisher
-      const response = await fetch(`${publisherUrl}/v1/store?epochs=${epochs}`, {
+      const response = await fetch(`${publisherUrl}/v1/blobs?epochs=${epochs}`, {
         method: 'PUT',
         body: file,
       });
