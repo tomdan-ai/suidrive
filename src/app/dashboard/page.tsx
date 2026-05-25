@@ -5,33 +5,69 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useCurrentAccount } from '@mysten/dapp-kit';
+import { useSuiClient } from '@/hooks/useSuiClient';
+import { WalletButton } from '@/components/WalletButton';
+import { formatDate } from '@/lib/utils';
 import type { FileObject } from '@/types';
 
+const PACKAGE_ID = process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || '';
+
 export default function DashboardPage() {
-  const [walletAddress, setWalletAddress] = useState('');
+  const account = useCurrentAccount();
+  const client = useSuiClient();
   const [files, setFiles] = useState<FileObject[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const loadFiles = async () => {
-    if (!walletAddress) return;
+  useEffect(() => {
+    if (!account || !PACKAGE_ID) return;
 
-    setLoading(true);
-    try {
-      // TODO: Implement API endpoint to fetch files
-      // const response = await fetch(`/api/files?owner=${walletAddress}`);
-      // const data = await response.json();
-      // setFiles(data.files);
+    async function loadFiles() {
+      if (!account) return; // Type guard
+      
+      setLoading(true);
+      try {
+        const objects = await client.getOwnedObjects({
+          owner: account.address,
+          filter: {
+            StructType: `${PACKAGE_ID}::file_object::FileObject`,
+          },
+          options: {
+            showContent: true,
+          },
+        });
 
-      // Mock data for now
-      setFiles([]);
-    } catch (error) {
-      console.error('Failed to load files:', error);
-    } finally {
-      setLoading(false);
+        const fileList: FileObject[] = [];
+
+        for (const obj of objects.data) {
+          if (obj.data && obj.data.content && obj.data.content.dataType === 'moveObject') {
+            const fields = obj.data.content.fields as any;
+            fileList.push({
+              fileId: fields.file_id,
+              owner: fields.owner,
+              latestVersion: parseInt(fields.latest_version),
+              createdAt: parseInt(fields.created_at),
+              name: fields.name,
+              mimeType: fields.mime_type,
+            });
+          }
+        }
+
+        // Sort by creation date (newest first)
+        fileList.sort((a, b) => b.createdAt - a.createdAt);
+
+        setFiles(fileList);
+      } catch (error) {
+        console.error('Failed to load files:', error);
+      } finally {
+        setLoading(false);
+      }
     }
-  };
+
+    loadFiles();
+  }, [account, client]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 text-white">
@@ -44,39 +80,35 @@ export default function DashboardPage() {
             </h1>
             <p className="text-gray-300">View your immutable file history</p>
           </div>
-          <Link
-            href="/upload"
-            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition"
-          >
-            + Upload File
-          </Link>
-        </div>
-
-        {/* Wallet Input */}
-        <div className="max-w-2xl mb-8">
           <div className="flex gap-4">
-            <input
-              type="text"
-              value={walletAddress}
-              onChange={(e) => setWalletAddress(e.target.value)}
-              placeholder="Enter wallet address (0x...)"
-              className="flex-1 px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 transition"
-            />
-            <button
-              onClick={loadFiles}
-              disabled={!walletAddress || loading}
-              className="px-6 py-3 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed rounded-lg font-semibold transition"
+            <Link
+              href="/upload"
+              className="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition"
             >
-              {loading ? 'Loading...' : 'Load Files'}
-            </button>
+              + Upload File
+            </Link>
+            <WalletButton />
           </div>
-          <p className="text-xs text-gray-400 mt-2">
-            zkLogin authentication coming soon
-          </p>
         </div>
 
-        {/* Files List */}
-        {files.length === 0 ? (
+        {/* Content */}
+        {!account ? (
+          <div className="text-center py-20">
+            <div className="text-6xl mb-4">🔐</div>
+            <h2 className="text-2xl font-semibold mb-2">Connect Your Wallet</h2>
+            <p className="text-gray-400 mb-6">
+              Connect your Sui wallet to view your files
+            </p>
+            <WalletButton />
+          </div>
+        ) : loading ? (
+          <div className="flex items-center justify-center py-20">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+              <p className="text-gray-400">Loading your files...</p>
+            </div>
+          </div>
+        ) : files.length === 0 ? (
           <div className="text-center py-20">
             <div className="text-6xl mb-4">📁</div>
             <h2 className="text-2xl font-semibold mb-2">No Files Yet</h2>
@@ -91,11 +123,34 @@ export default function DashboardPage() {
             </Link>
           </div>
         ) : (
-          <div className="grid gap-4">
-            {files.map((file) => (
-              <FileCard key={file.fileId} file={file} />
-            ))}
-          </div>
+          <>
+            {/* Stats */}
+            <div className="grid md:grid-cols-3 gap-6 mb-8">
+              <div className="bg-gray-800/50 backdrop-blur-lg rounded-xl p-6 border border-gray-700">
+                <p className="text-gray-400 text-sm mb-1">Total Files</p>
+                <p className="text-3xl font-bold">{files.length}</p>
+              </div>
+              <div className="bg-gray-800/50 backdrop-blur-lg rounded-xl p-6 border border-gray-700">
+                <p className="text-gray-400 text-sm mb-1">Total Versions</p>
+                <p className="text-3xl font-bold">
+                  {files.reduce((sum, f) => sum + f.latestVersion, 0)}
+                </p>
+              </div>
+              <div className="bg-gray-800/50 backdrop-blur-lg rounded-xl p-6 border border-gray-700">
+                <p className="text-gray-400 text-sm mb-1">Latest Upload</p>
+                <p className="text-lg font-semibold">
+                  {formatDate(files[0].createdAt)}
+                </p>
+              </div>
+            </div>
+
+            {/* Files List */}
+            <div className="grid gap-4">
+              {files.map((file) => (
+                <FileCard key={file.fileId} file={file} />
+              ))}
+            </div>
+          </>
         )}
       </div>
     </div>
@@ -104,24 +159,33 @@ export default function DashboardPage() {
 
 function FileCard({ file }: { file: FileObject }) {
   return (
-    <div className="bg-gray-800/50 backdrop-blur-lg rounded-xl p-6 border border-gray-700 hover:border-blue-500 transition">
-      <div className="flex justify-between items-start">
-        <div>
-          <h3 className="text-xl font-semibold mb-2">{file.name || 'Unnamed File'}</h3>
-          <p className="text-sm text-gray-400">
-            File ID: <code className="text-blue-400">{file.fileId}</code>
-          </p>
-          <p className="text-sm text-gray-400">
-            Versions: {file.latestVersion}
-          </p>
+    <Link href={`/files/${file.fileId}`}>
+      <div className="bg-gray-800/50 backdrop-blur-lg rounded-xl p-6 border border-gray-700 hover:border-blue-500 transition cursor-pointer">
+        <div className="flex justify-between items-start">
+          <div className="flex-1">
+            <h3 className="text-xl font-semibold mb-2">{file.name || 'Unnamed File'}</h3>
+            <div className="flex flex-wrap gap-4 text-sm text-gray-400">
+              <span>
+                <span className="text-gray-500">Type:</span> {file.mimeType || 'Unknown'}
+              </span>
+              <span>
+                <span className="text-gray-500">Versions:</span> {file.latestVersion}
+              </span>
+              <span>
+                <span className="text-gray-500">Created:</span> {formatDate(file.createdAt)}
+              </span>
+            </div>
+            <p className="text-xs text-gray-500 mt-2 font-mono">
+              {file.fileId}
+            </p>
+          </div>
+          <div className="ml-4">
+            <div className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-semibold transition">
+              View History →
+            </div>
+          </div>
         </div>
-        <Link
-          href={`/files/${file.fileId}`}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-semibold transition"
-        >
-          View History
-        </Link>
       </div>
-    </div>
+    </Link>
   );
 }
