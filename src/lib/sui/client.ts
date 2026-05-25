@@ -1,127 +1,85 @@
 /**
- * Sui Client via Tatum
- * Handles all blockchain interactions through Tatum RPC infrastructure
+ * Sui Client
+ * Handles all blockchain interactions
  */
 
-import { SuiJsonRpcClient, getJsonRpcFullnodeUrl } from "@mysten/sui/jsonRpc";
-import type { FileObject, VersionObject } from "@/types";
-
-const network = (process.env.SUI_NETWORK ?? "testnet") as "testnet" | "mainnet" | "devnet" | "localnet";
-const url = process.env.TATUM_SUI_RPC_URL ?? getJsonRpcFullnodeUrl(network);
-
-// Base Sui client
-const baseSuiClient = new SuiJsonRpcClient({ url, network });
+import { Transaction } from '@mysten/sui/transactions';
+import type { FileObject, VersionObject } from '@/types';
 
 /**
  * Enhanced Sui client with SuiDrive-specific methods
+ * Note: The actual Sui client is provided by the dapp-kit context
  */
-export class SuiClient {
-  private client: SuiJsonRpcClient;
+export class SuiClientEnhanced {
   private packageId: string;
 
   constructor() {
-    this.client = baseSuiClient;
-    this.packageId = process.env.SUI_PACKAGE_ID || '';
+    this.packageId = process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || '';
   }
 
   /**
-   * Get the base client for direct access
+   * Create a transaction to create a new File object on Sui
    */
-  getBaseClient(): SuiJsonRpcClient {
-    return this.client;
-  }
-
-  /**
-   * Create a new File object on Sui
-   * TODO: Implement after Move contract deployment
-   */
-  async createFileObject(
-    owner: string,
+  createFileTransaction(
     fileId: string,
-    name?: string,
-    mimeType?: string
-  ): Promise<string> {
+    name: string,
+    mimeType: string
+  ): Transaction {
     if (!this.packageId) {
       throw new Error('SUI_PACKAGE_ID not configured. Deploy Move contract first.');
     }
 
-    // TODO: Implement actual Move contract call
-    // For now, return a mock transaction digest
-    console.warn('createFileObject: Move contract not yet deployed');
-    return 'mock_tx_digest_' + Date.now();
+    const tx = new Transaction();
+
+    tx.moveCall({
+      target: `${this.packageId}::file_object::create_file`,
+      arguments: [
+        tx.pure.string(fileId),
+        tx.pure.string(name),
+        tx.pure.string(mimeType),
+      ],
+    });
+
+    return tx;
   }
 
   /**
-   * Create a new Version object on Sui
-   * TODO: Implement after Move contract deployment
+   * Create a transaction to create a new Version object on Sui
    */
-  async createVersionObject(
+  createVersionTransaction(
+    versionId: string,
     fileId: string,
     walrusBlobId: string,
-    owner: string,
     previousVersion: string | null,
-    aiSummary?: string
-  ): Promise<string> {
+    aiSummary: string,
+    size: number
+  ): Transaction {
     if (!this.packageId) {
       throw new Error('SUI_PACKAGE_ID not configured. Deploy Move contract first.');
     }
 
-    // TODO: Implement actual Move contract call
-    console.warn('createVersionObject: Move contract not yet deployed');
-    return 'mock_tx_digest_' + Date.now();
-  }
+    const tx = new Transaction();
 
-  /**
-   * Get file object by ID
-   * TODO: Implement after Move contract deployment
-   */
-  async getFileObject(fileId: string): Promise<FileObject | null> {
-    console.warn('getFileObject: Not yet implemented');
-    return null;
-  }
+    // Convert previousVersion to Option type
+    const prevVersionArg = previousVersion 
+      ? tx.pure.option('string', previousVersion)
+      : tx.pure.option('string', null);
 
-  /**
-   * Get version object by ID
-   * TODO: Implement after Move contract deployment
-   */
-  async getVersionObject(versionId: string): Promise<VersionObject | null> {
-    console.warn('getVersionObject: Not yet implemented');
-    return null;
-  }
+    tx.moveCall({
+      target: `${this.packageId}::version_object::create_version`,
+      arguments: [
+        tx.pure.string(versionId),
+        tx.pure.string(fileId),
+        tx.pure.string(walrusBlobId),
+        prevVersionArg,
+        tx.pure.string(aiSummary || ''),
+        tx.pure.u64(size),
+      ],
+    });
 
-  /**
-   * Get all files owned by an address
-   * TODO: Implement after Move contract deployment
-   */
-  async getFilesByOwner(owner: string): Promise<FileObject[]> {
-    console.warn('getFilesByOwner: Not yet implemented');
-    return [];
-  }
-
-  /**
-   * Get version chain for a file
-   * TODO: Implement after Move contract deployment
-   */
-  async getVersionChain(fileId: string): Promise<VersionObject[]> {
-    console.warn('getVersionChain: Not yet implemented');
-    return [];
-  }
-
-  /**
-   * Get current block timestamp
-   */
-  async getCurrentTimestamp(): Promise<number> {
-    try {
-      // For now, use local timestamp
-      // TODO: Get from latest checkpoint when needed
-      return Date.now();
-    } catch (error) {
-      console.error('Error fetching timestamp:', error);
-      return Date.now();
-    }
+    return tx;
   }
 }
 
-// Export both the enhanced client and base client
-export const suiClientEnhanced = new SuiClient();
-export const suiClient = baseSuiClient;
+// Export the enhanced client
+export const suiClientEnhanced = new SuiClientEnhanced();
