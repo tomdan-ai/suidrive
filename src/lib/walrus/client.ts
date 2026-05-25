@@ -20,15 +20,18 @@ export class WalrusClient {
     try {
       const publisherUrl = process.env.NEXT_PUBLIC_WALRUS_PUBLISHER_URL || 'https://publisher.walrus-testnet.walrus.space';
       
+      // Walrus testnet requires epochs parameter
+      const epochs = 5; // Store for 5 epochs
+      
       // Upload file directly to Walrus publisher
-      const response = await fetch(`${publisherUrl}/v1/store`, {
+      const response = await fetch(`${publisherUrl}/v1/store?epochs=${epochs}`, {
         method: 'PUT',
         body: file,
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Walrus upload failed: ${response.status} ${errorText}`);
+        throw new Error(`Walrus upload failed (${response.status}): ${errorText}`);
       }
 
       const data = await response.json();
