@@ -45,6 +45,7 @@ export default function DashboardPage() {
           if (obj.data && obj.data.content && obj.data.content.dataType === 'moveObject') {
             const fields = obj.data.content.fields as any;
             fileList.push({
+              objectId: obj.data.objectId, // Store the actual Sui object ID
               fileId: fields.file_id,
               owner: fields.owner,
               latestVersion: parseInt(fields.latest_version),
@@ -159,7 +160,7 @@ export default function DashboardPage() {
 
 function FileCard({ file }: { file: FileObject }) {
   return (
-    <Link href={`/files/${file.fileId}`}>
+    <Link href={`/files/${file.objectId}`}>
       <div className="bg-gray-800/50 backdrop-blur-lg rounded-xl p-6 border border-gray-700 hover:border-blue-500 transition cursor-pointer">
         <div className="flex justify-between items-start">
           <div className="flex-1">

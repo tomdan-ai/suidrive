@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { useFileHistory } from '@/hooks/useFileHistory';
 import { Timeline } from '@/components/Timeline';
@@ -13,8 +13,9 @@ import { WalletButton } from '@/components/WalletButton';
 import { formatDate, formatBytes } from '@/lib/utils';
 import type { TimelineVersion } from '@/types';
 
-export default function FileDetailPage({ params }: { params: { fileId: string } }) {
-  const { fileHistory, loading, error } = useFileHistory(params.fileId);
+export default function FileDetailPage({ params }: { params: Promise<{ fileId: string }> }) {
+  const { fileId } = React.use(params);
+  const { fileHistory, loading, error } = useFileHistory(fileId);
   const [selectedVersion, setSelectedVersion] = useState<TimelineVersion | null>(null);
 
   if (loading) {
@@ -181,6 +182,16 @@ export default function FileDetailPage({ params }: { params: { fileId: string } 
                   </div>
                 )}
 
+                {/* File Preview */}
+                <div className="mb-6">
+                  <p className="text-xs text-gray-500 mb-2">Preview</p>
+                  <FilePreview 
+                    blobId={selectedVersion.blobId} 
+                    mimeType={fileHistory.file.mimeType}
+                    fileName={fileHistory.file.name}
+                  />
+                </div>
+
                 <div className="flex gap-3">
                   <a
                     href={`https://aggregator.walrus-testnet.walrus.space/v1/${selectedVersion.blobId}`}
@@ -204,6 +215,62 @@ export default function FileDetailPage({ params }: { params: { fileId: string } 
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// File Preview Component
+function FilePreview({ blobId, mimeType, fileName }: { blobId: string; mimeType?: string; fileName?: string }) {
+  const walrusUrl = `https://aggregator.walrus-testnet.walrus.space/v1/${blobId}`;
+  
+  // Image preview
+  if (mimeType?.startsWith('image/')) {
+    return (
+      <div className="bg-gray-900/50 rounded-lg p-4">
+        <img 
+          src={walrusUrl} 
+          alt={fileName || 'File preview'} 
+          className="max-w-full max-h-96 mx-auto rounded"
+          onError={(e) => {
+            e.currentTarget.src = '';
+            e.currentTarget.alt = 'Preview not available';
+          }}
+        />
+      </div>
+    );
+  }
+  
+  // PDF preview
+  if (mimeType === 'application/pdf') {
+    return (
+      <div className="bg-gray-900/50 rounded-lg p-4">
+        <iframe 
+          src={walrusUrl} 
+          className="w-full h-96 rounded"
+          title={fileName || 'PDF preview'}
+        />
+      </div>
+    );
+  }
+  
+  // Text preview
+  if (mimeType?.startsWith('text/') || mimeType === 'application/json') {
+    return (
+      <div className="bg-gray-900/50 rounded-lg p-4">
+        <iframe 
+          src={walrusUrl} 
+          className="w-full h-64 rounded bg-white text-black"
+          title={fileName || 'Text preview'}
+        />
+      </div>
+    );
+  }
+  
+  // No preview available
+  return (
+    <div className="bg-gray-900/50 rounded-lg p-8 text-center text-gray-400">
+      <p>Preview not available for this file type</p>
+      <p className="text-sm mt-2">Click download to view the file</p>
     </div>
   );
 }

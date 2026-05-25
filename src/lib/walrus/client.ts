@@ -18,16 +18,35 @@ export class WalrusClient {
    */
   async uploadFile(file: File): Promise<{ blobId: string; suiRef?: string }> {
     try {
-      // Phase 2: This will use the real Walrus client with wallet signer
-      // For now, return mock data
-      console.warn('Walrus upload: Using mock data. Full implementation requires wallet signer (Phase 2)');
+      const publisherUrl = process.env.NEXT_PUBLIC_WALRUS_PUBLISHER_URL || 'https://publisher.walrus-testnet.walrus.space';
       
-      const mockBlobId = `mock_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      // Upload file directly to Walrus publisher
+      const response = await fetch(`${publisherUrl}/v1/store`, {
+        method: 'PUT',
+        body: file,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Walrus upload failed: ${response.status} ${errorText}`);
+      }
+
+      const data = await response.json();
       
-      return {
-        blobId: mockBlobId,
-        suiRef: undefined,
-      };
+      // Handle different response formats
+      if (data.newlyCreated) {
+        return {
+          blobId: data.newlyCreated.blobObject.blobId,
+          suiRef: data.newlyCreated.blobObject.id,
+        };
+      } else if (data.alreadyCertified) {
+        return {
+          blobId: data.alreadyCertified.blobId,
+          suiRef: data.alreadyCertified.event?.txDigest,
+        };
+      }
+
+      throw new Error('Unexpected Walrus response format');
     } catch (error) {
       console.error('Walrus upload error:', error);
       throw new Error(`Failed to upload to Walrus: ${error instanceof Error ? error.message : 'Unknown error'}`);

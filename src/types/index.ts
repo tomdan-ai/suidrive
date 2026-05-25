@@ -7,6 +7,7 @@
 // ============================================================================
 
 export interface FileObject {
+  objectId?: string; // Sui object ID (for querying)
   fileId: string;
   owner: string; // Sui wallet address
   latestVersion: number;
