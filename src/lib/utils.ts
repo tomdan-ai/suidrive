@@ -98,5 +98,5 @@ export function isValidSuiAddress(address: string): boolean {
  */
 export function getWalrusBlobUrl(blobId: string, aggregatorUrl?: string): string {
   const baseUrl = aggregatorUrl || 'https://aggregator.walrus-testnet.walrus.space';
-  return `${baseUrl}/v1/${blobId}`;
+  return `${baseUrl}/v1/blobs/${blobId}`;
 }
