@@ -55,7 +55,9 @@ export default function FileDetailPage({ params }: { params: Promise<{ fileId: s
     );
   }
 
-  const latestVersion = fileHistory.versions[fileHistory.versions.length - 1];
+  const latestVersion = fileHistory.versions.length > 0
+    ? fileHistory.versions[fileHistory.versions.length - 1]
+    : null;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 text-white">
@@ -118,14 +120,15 @@ export default function FileDetailPage({ params }: { params: Promise<{ fileId: s
 
               {/* Actions */}
               <div className="mt-6 space-y-2">
-                <a
-                  href={`https://aggregator.walrus-testnet.walrus.space/v1/${latestVersion.blobId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block w-full py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold text-center transition"
-                >
-                  Download Latest
-                </a>
+                {latestVersion && (
+                  <a
+                    href={`/api/download?blobId=${latestVersion.blobId}&fileName=${encodeURIComponent(fileHistory.file.name || latestVersion.blobId)}`}
+                    download
+                    className="block w-full py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold text-center transition"
+                  >
+                    Download Latest
+                  </a>
+                )}
                 <Link
                   href={`/upload?fileId=${fileHistory.file.fileId}`}
                   className="block w-full py-2 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold text-center transition"
@@ -194,9 +197,8 @@ export default function FileDetailPage({ params }: { params: Promise<{ fileId: s
 
                 <div className="flex gap-3">
                   <a
-                    href={`https://aggregator.walrus-testnet.walrus.space/v1/${selectedVersion.blobId}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    href={`/api/download?blobId=${selectedVersion.blobId}&fileName=${encodeURIComponent(fileHistory.file.name || selectedVersion.blobId)}`}
+                    download
                     className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition"
                   >
                     Download
@@ -221,56 +223,106 @@ export default function FileDetailPage({ params }: { params: Promise<{ fileId: s
 
 // File Preview Component
 function FilePreview({ blobId, mimeType, fileName }: { blobId: string; mimeType?: string; fileName?: string }) {
-  const walrusUrl = `https://aggregator.walrus-testnet.walrus.space/v1/${blobId}`;
+  const [textContent, setTextContent] = React.useState<string | null>(null);
+  const [imageError, setImageError] = React.useState(false);
   
-  // Image preview
+  // Use Walrus aggregator directly - it supports CORS and direct browser access
+  const aggregatorUrl = process.env.NEXT_PUBLIC_WALRUS_AGGREGATOR_URL || 'https://aggregator.walrus-testnet.walrus.space';
+  const walrusUrl = `${aggregatorUrl}/v1/blobs/${blobId}`;
+
+  // Image preview - direct from Walrus (CORS enabled)
   if (mimeType?.startsWith('image/')) {
+    if (imageError) {
+      return (
+        <div className="bg-gray-900/50 rounded-lg p-8 text-center text-gray-400">
+          <p>Failed to load image preview</p>
+          <a href={walrusUrl} target="_blank" rel="noopener noreferrer" className="text-blue-400 underline text-sm mt-2 inline-block">
+            Try direct link
+          </a>
+        </div>
+      );
+    }
     return (
       <div className="bg-gray-900/50 rounded-lg p-4">
-        <img 
-          src={walrusUrl} 
-          alt={fileName || 'File preview'} 
+        <img
+          src={walrusUrl}
+          alt={fileName || 'File preview'}
           className="max-w-full max-h-96 mx-auto rounded"
-          onError={(e) => {
-            e.currentTarget.src = '';
-            e.currentTarget.alt = 'Preview not available';
-          }}
+          onError={() => setImageError(true)}
         />
       </div>
     );
   }
-  
-  // PDF preview
+
+  // Video preview - streaming from Walrus
+  if (mimeType?.startsWith('video/')) {
+    return (
+      <div className="bg-gray-900/50 rounded-lg p-4">
+        <video controls className="w-full max-h-96 rounded">
+          <source src={walrusUrl} type={mimeType} />
+          Your browser does not support video playback.
+        </video>
+      </div>
+    );
+  }
+
+  // Audio preview
+  if (mimeType?.startsWith('audio/')) {
+    return (
+      <div className="bg-gray-900/50 rounded-lg p-4">
+        <audio controls className="w-full">
+          <source src={walrusUrl} type={mimeType} />
+          Your browser does not support audio playback.
+        </audio>
+      </div>
+    );
+  }
+
+  // PDF preview - iframe directly to Walrus
   if (mimeType === 'application/pdf') {
     return (
       <div className="bg-gray-900/50 rounded-lg p-4">
-        <iframe 
-          src={walrusUrl} 
-          className="w-full h-96 rounded"
+        <iframe
+          src={walrusUrl}
+          className="w-full h-96 rounded bg-white"
           title={fileName || 'PDF preview'}
         />
+        <p className="text-xs text-gray-500 mt-2 text-center">
+          If preview doesn't load,{' '}
+          <a href={walrusUrl} target="_blank" rel="noopener noreferrer" className="text-blue-400 underline">
+            open in new tab
+          </a>
+        </p>
       </div>
     );
   }
-  
-  // Text preview
+
+  // Text / JSON preview - fetch and display
   if (mimeType?.startsWith('text/') || mimeType === 'application/json') {
+    if (textContent === null) {
+      fetch(walrusUrl)
+        .then((r) => r.text())
+        .then((t) => setTextContent(t.slice(0, 4000)))
+        .catch(() => setTextContent('Could not load preview.'));
+    }
     return (
-      <div className="bg-gray-900/50 rounded-lg p-4">
-        <iframe 
-          src={walrusUrl} 
-          className="w-full h-64 rounded bg-white text-black"
-          title={fileName || 'Text preview'}
-        />
+      <div className="bg-gray-900/50 rounded-lg p-4 max-h-64 overflow-auto">
+        <pre className="text-xs text-gray-300 whitespace-pre-wrap break-words">
+          {textContent ?? 'Loading…'}
+        </pre>
       </div>
     );
   }
-  
-  // No preview available
+
+  // No preview available - offer download
   return (
     <div className="bg-gray-900/50 rounded-lg p-8 text-center text-gray-400">
       <p>Preview not available for this file type</p>
-      <p className="text-sm mt-2">Click download to view the file</p>
+      <p className="text-sm mt-2">
+        <a href={walrusUrl} target="_blank" rel="noopener noreferrer" className="text-blue-400 underline">
+          Download to view
+        </a>
+      </p>
     </div>
   );
 }
