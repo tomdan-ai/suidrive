@@ -5,7 +5,8 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useCurrentAccount, useSignAndExecuteTransaction } from '@mysten/dapp-kit';
 import { WalletButton } from '@/components/WalletButton';
 import { suiClientEnhanced } from '@/lib/sui/client';
@@ -14,14 +15,38 @@ import { analyzeFile } from '@/lib/ai/analyze';
 import { generateFileId, generateVersionId, readFileAsText } from '@/lib/utils';
 import type { UploadProgress } from '@/types';
 
-export default function UploadPage() {
+function UploadPageContent() {
   const account = useCurrentAccount();
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+  const searchParams = useSearchParams();
   
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState<UploadProgress | null>(null);
   const [result, setResult] = useState<any>(null);
+  const [existingFileId, setExistingFileId] = useState<string | null>(null);
+  const [versionNumber, setVersionNumber] = useState<number>(1);
+
+  // Check if we're uploading a new version
+  useEffect(() => {
+    const fileIdParam = searchParams.get('fileId');
+    if (fileIdParam) {
+      setExistingFileId(fileIdParam);
+      // Fetch the file to get the current version count
+      fetchVersionCount(fileIdParam);
+    }
+  }, [searchParams]);
+
+  const fetchVersionCount = async (_fileId: string) => {
+    try {
+      // For now, just set version to 2 when uploading a new version
+      // The actual version number will be determined by the blockchain
+      setVersionNumber(2);
+    } catch (error) {
+      console.error('Error fetching version count:', error);
+      setVersionNumber(2);
+    }
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -41,11 +66,12 @@ export default function UploadPage() {
     setProgress({ stage: 'uploading', progress: 10, message: 'Preparing upload...' });
 
     try {
-      // Step 1: Generate IDs
-      const fileId = generateFileId();
-      const versionId = generateVersionId(fileId, 1);
+      // Step 1: Determine if this is a new file or new version
+      const fileId = existingFileId || generateFileId();
+      const versionId = generateVersionId(fileId, versionNumber);
+      const isNewVersion = !!existingFileId;
 
-      // Step 2: Upload to Walrus (mock for now)
+      // Step 2: Upload to Walrus
       setProgress({ stage: 'uploading', progress: 30, message: 'Uploading to Walrus...' });
       const { blobId } = await walrusClient.uploadFile(file);
 
@@ -66,41 +92,49 @@ export default function UploadPage() {
         console.warn('AI analysis failed:', error);
       }
 
-      // Step 4: Create File Object on Sui
-      setProgress({ stage: 'blockchain', progress: 70, message: 'Creating file on Sui...' });
-      
-      const fileTx = suiClientEnhanced.createFileTransaction(
-        fileId,
-        file.name,
-        file.type
-      );
-
-      await new Promise<void>((resolve, reject) => {
-        signAndExecute(
-          {
-            transaction: fileTx,
-          },
-          {
-            onSuccess: (result) => {
-              console.log('File created:', result);
-              resolve();
-            },
-            onError: (error) => {
-              console.error('File creation failed:', error);
-              reject(error);
-            },
-          }
+      // Step 4: Create File Object on Sui (only for new files)
+      if (!isNewVersion) {
+        setProgress({ stage: 'blockchain', progress: 70, message: 'Creating file on Sui...' });
+        
+        const fileTx = suiClientEnhanced.createFileTransaction(
+          fileId,
+          file.name,
+          file.type
         );
-      });
+
+        await new Promise<void>((resolve, reject) => {
+          signAndExecute(
+            {
+              transaction: fileTx,
+            },
+            {
+              onSuccess: (result) => {
+                console.log('File created:', result);
+                resolve();
+              },
+              onError: (error) => {
+                console.error('File creation failed:', error);
+                reject(error);
+              },
+            }
+          );
+        });
+      } else {
+        setProgress({ stage: 'blockchain', progress: 70, message: 'Adding new version...' });
+      }
 
       // Step 5: Create Version Object on Sui
       setProgress({ stage: 'blockchain', progress: 85, message: 'Creating version on Sui...' });
       
+      // For new versions, we don't link to previous version in this simplified implementation
+      // The version history is tracked by the file_id field
+      const previousVersionId = null;
+
       const versionTx = suiClientEnhanced.createVersionTransaction(
         versionId,
         fileId,
         blobId,
-        null, // No previous version
+        previousVersionId,
         aiSummary,
         file.size
       );
@@ -135,6 +169,8 @@ export default function UploadPage() {
         blobId,
         transactionDigest: txDigest,
         aiSummary,
+        isNewVersion,
+        versionNumber,
       });
 
     } catch (error) {
@@ -153,10 +189,18 @@ export default function UploadPage() {
           {/* Header */}
           <div className="text-center mb-8">
             <h1 className="text-5xl font-bold mb-4">
-              Upload to <span className="text-blue-400">SuiDrive</span>
+              {existingFileId ? (
+                <>Upload <span className="text-blue-400">New Version</span></>
+              ) : (
+                <>Upload to <span className="text-blue-400">SuiDrive</span></>
+              )}
             </h1>
             <p className="text-gray-300 text-lg mb-6">
-              Create immutable file history on Walrus + Sui
+              {existingFileId ? (
+                <>Adding version {versionNumber} to existing file</>
+              ) : (
+                <>Create immutable file history on Walrus + Sui</>
+              )}
             </p>
             <div className="flex justify-center">
               <WalletButton />
@@ -218,7 +262,7 @@ export default function UploadPage() {
                   disabled={!file || uploading}
                   className="w-full py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg font-semibold transition"
                 >
-                  {uploading ? 'Uploading...' : 'Upload to SuiDrive'}
+                  {uploading ? 'Uploading...' : existingFileId ? `Upload Version ${versionNumber}` : 'Upload to SuiDrive'}
                 </button>
 
                 {/* Progress */}
@@ -242,7 +286,7 @@ export default function UploadPage() {
                 {result && result.success && (
                   <div className="mt-6 p-4 bg-green-900/30 border border-green-700 rounded-lg">
                     <h3 className="font-semibold text-green-400 mb-2">
-                      ✓ Upload Successful
+                      ✓ {result.isNewVersion ? `Version ${result.versionNumber} Added` : 'Upload Successful'}
                     </h3>
                     <div className="space-y-1 text-sm">
                       <p>
@@ -272,6 +316,14 @@ export default function UploadPage() {
                         </p>
                       )}
                     </div>
+                    {result.isNewVersion && (
+                      <a
+                        href={`/files/${result.fileId}`}
+                        className="mt-4 block w-full py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold text-center transition"
+                      >
+                        View File History
+                      </a>
+                    )}
                   </div>
                 )}
               </>
@@ -296,5 +348,20 @@ export default function UploadPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function UploadPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 text-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-400">Loading...</p>
+        </div>
+      </div>
+    }>
+      <UploadPageContent />
+    </Suspense>
   );
 }
