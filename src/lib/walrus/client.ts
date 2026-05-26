@@ -24,7 +24,7 @@ export class WalrusClient {
       const epochs = 5; // Store for 5 epochs
       
       // Upload file directly to Walrus publisher
-      const response = await fetch(`${publisherUrl}/v1/blobs?epochs=${epochs}`, {
+      const response = await fetch(`${publisherUrl}/v1/blobs?epochs=${epochs}&force=true`, {
         method: 'PUT',
         body: file,
       });
@@ -73,7 +73,7 @@ export class WalrusClient {
    * Get blob URL for direct access
    */
   getBlobUrl(blobId: string): string {
-    return `https://aggregator.walrus-testnet.walrus.space/v1/${blobId}`;
+    return `https://aggregator.walrus-testnet.walrus.space/v1/blobs/${blobId}`;
   }
 
   /**
