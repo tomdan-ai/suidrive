@@ -9,6 +9,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useFileHistory } from '@/hooks/useFileHistory';
 import { Timeline } from '@/components/Timeline';
+import { VersionComparison } from '@/components/VersionComparison';
 import { WalletButton } from '@/components/WalletButton';
 import { formatDate, formatBytes } from '@/lib/utils';
 import type { TimelineVersion } from '@/types';
@@ -130,7 +131,7 @@ export default function FileDetailPage({ params }: { params: Promise<{ fileId: s
                   </a>
                 )}
                 <Link
-                  href={`/upload?fileId=${fileHistory.file.fileId}`}
+                  href={`/upload?fileId=${fileHistory.file.fileId}&objectId=${fileHistory.file.objectId || ''}`}
                   className="block w-full py-2 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold text-center transition"
                 >
                   Upload New Version
@@ -195,7 +196,7 @@ export default function FileDetailPage({ params }: { params: Promise<{ fileId: s
                   />
                 </div>
 
-                <div className="flex gap-3">
+                <div className="flex gap-3 flex-wrap">
                   <a
                     href={`/api/download?blobId=${selectedVersion.blobId}&fileName=${encodeURIComponent(fileHistory.file.name || selectedVersion.blobId)}`}
                     download
@@ -211,7 +212,24 @@ export default function FileDetailPage({ params }: { params: Promise<{ fileId: s
                   >
                     View on Explorer
                   </a>
+                  <Link
+                    href={`/verify/${encodeURIComponent(selectedVersion.blobId)}`}
+                    className="px-4 py-2 bg-green-700 hover:bg-green-600 rounded-lg font-semibold transition"
+                  >
+                    🔍 Public Verify
+                  </Link>
                 </div>
+              </div>
+            )}
+
+            {/* Version Comparison */}
+            {fileHistory.versions.length >= 2 && (
+              <div className="mt-8">
+                <VersionComparison
+                  versions={fileHistory.versions}
+                  fileName={fileHistory.file.name || 'file'}
+                  mimeType={fileHistory.file.mimeType}
+                />
               </div>
             )}
           </div>

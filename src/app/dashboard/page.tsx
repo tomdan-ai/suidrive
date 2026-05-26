@@ -5,21 +5,28 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useCurrentAccount } from '@mysten/dapp-kit';
 import { useSuiClient } from '@/hooks/useSuiClient';
 import { WalletButton } from '@/components/WalletButton';
-import { formatDate } from '@/lib/utils';
+import { formatDate, formatBytes } from '@/lib/utils';
 import type { FileObject } from '@/types';
 
 const PACKAGE_ID = process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || '';
 
+interface DashboardFile extends FileObject {
+  totalSize?: number;
+  versionCount?: number;
+}
+
 export default function DashboardPage() {
   const account = useCurrentAccount();
   const client = useSuiClient();
-  const [files, setFiles] = useState<FileObject[]>([]);
+  const [files, setFiles] = useState<DashboardFile[]>([]);
   const [loading, setLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'name' | 'versions'>('newest');
 
   useEffect(() => {
     if (!account || !PACKAGE_ID) return;
@@ -29,7 +36,8 @@ export default function DashboardPage() {
       
       setLoading(true);
       try {
-        const objects = await client.getOwnedObjects({
+        // Fetch all FileObjects owned by the user
+        const fileObjects = await client.getOwnedObjects({
           owner: account.address,
           filter: {
             StructType: `${PACKAGE_ID}::file_object::FileObject`,
@@ -39,25 +47,52 @@ export default function DashboardPage() {
           },
         });
 
-        const fileList: FileObject[] = [];
+        // Fetch all VersionObjects to compute version counts and sizes
+        const versionObjects = await client.getOwnedObjects({
+          owner: account.address,
+          filter: {
+            StructType: `${PACKAGE_ID}::version_object::VersionObject`,
+          },
+          options: {
+            showContent: true,
+          },
+        });
 
-        for (const obj of objects.data) {
+        // Build a map: fileId -> { count, totalSize }
+        const versionStats = new Map<string, { count: number; totalSize: number }>();
+        for (const obj of versionObjects.data) {
+          if (obj.data?.content?.dataType === 'moveObject') {
+            const fields = obj.data.content.fields as any;
+            const fileId = fields.file_id;
+            const size = parseInt(fields.size || '0');
+            const existing = versionStats.get(fileId) || { count: 0, totalSize: 0 };
+            versionStats.set(fileId, {
+              count: existing.count + 1,
+              totalSize: existing.totalSize + size,
+            });
+          }
+        }
+
+        const fileList: DashboardFile[] = [];
+
+        for (const obj of fileObjects.data) {
           if (obj.data && obj.data.content && obj.data.content.dataType === 'moveObject') {
             const fields = obj.data.content.fields as any;
+            const fileId = fields.file_id;
+            const stats = versionStats.get(fileId);
             fileList.push({
-              objectId: obj.data.objectId, // Store the actual Sui object ID
-              fileId: fields.file_id,
+              objectId: obj.data.objectId,
+              fileId,
               owner: fields.owner,
               latestVersion: parseInt(fields.latest_version),
               createdAt: parseInt(fields.created_at),
               name: fields.name,
               mimeType: fields.mime_type,
+              versionCount: stats?.count || 0,
+              totalSize: stats?.totalSize || 0,
             });
           }
         }
-
-        // Sort by creation date (newest first)
-        fileList.sort((a, b) => b.createdAt - a.createdAt);
 
         setFiles(fileList);
       } catch (error) {
@@ -69,6 +104,44 @@ export default function DashboardPage() {
 
     loadFiles();
   }, [account, client]);
+
+  // Filter and sort files
+  const filteredFiles = useMemo(() => {
+    let result = [...files];
+
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(
+        (f) =>
+          f.name?.toLowerCase().includes(q) ||
+          f.mimeType?.toLowerCase().includes(q) ||
+          f.fileId.toLowerCase().includes(q)
+      );
+    }
+
+    // Sort
+    switch (sortBy) {
+      case 'newest':
+        result.sort((a, b) => b.createdAt - a.createdAt);
+        break;
+      case 'oldest':
+        result.sort((a, b) => a.createdAt - b.createdAt);
+        break;
+      case 'name':
+        result.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        break;
+      case 'versions':
+        result.sort((a, b) => (b.versionCount || 0) - (a.versionCount || 0));
+        break;
+    }
+
+    return result;
+  }, [files, searchQuery, sortBy]);
+
+  // Compute aggregate stats
+  const totalStorage = files.reduce((sum, f) => sum + (f.totalSize || 0), 0);
+  const totalVersions = files.reduce((sum, f) => sum + (f.versionCount || 0), 0);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 text-white">
@@ -82,6 +155,12 @@ export default function DashboardPage() {
             <p className="text-gray-300">View your immutable file history</p>
           </div>
           <div className="flex gap-4">
+            <Link
+              href="/verify"
+              className="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold transition"
+            >
+              🔍 Verify
+            </Link>
             <Link
               href="/upload"
               className="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition"
@@ -126,31 +205,62 @@ export default function DashboardPage() {
         ) : (
           <>
             {/* Stats */}
-            <div className="grid md:grid-cols-3 gap-6 mb-8">
+            <div className="grid md:grid-cols-4 gap-6 mb-8">
               <div className="bg-gray-800/50 backdrop-blur-lg rounded-xl p-6 border border-gray-700">
                 <p className="text-gray-400 text-sm mb-1">Total Files</p>
                 <p className="text-3xl font-bold">{files.length}</p>
               </div>
               <div className="bg-gray-800/50 backdrop-blur-lg rounded-xl p-6 border border-gray-700">
                 <p className="text-gray-400 text-sm mb-1">Total Versions</p>
-                <p className="text-3xl font-bold">
-                  {files.reduce((sum, f) => sum + f.latestVersion, 0)}
-                </p>
+                <p className="text-3xl font-bold">{totalVersions}</p>
+              </div>
+              <div className="bg-gray-800/50 backdrop-blur-lg rounded-xl p-6 border border-gray-700">
+                <p className="text-gray-400 text-sm mb-1">Storage Used</p>
+                <p className="text-3xl font-bold">{formatBytes(totalStorage)}</p>
               </div>
               <div className="bg-gray-800/50 backdrop-blur-lg rounded-xl p-6 border border-gray-700">
                 <p className="text-gray-400 text-sm mb-1">Latest Upload</p>
                 <p className="text-lg font-semibold">
-                  {formatDate(files[0].createdAt)}
+                  {files.length > 0
+                    ? formatDate([...files].sort((a, b) => b.createdAt - a.createdAt)[0].createdAt)
+                    : '—'}
                 </p>
               </div>
             </div>
 
-            {/* Files List */}
-            <div className="grid gap-4">
-              {files.map((file) => (
-                <FileCard key={file.fileId} file={file} />
-              ))}
+            {/* Search & Sort */}
+            <div className="flex flex-col md:flex-row gap-4 mb-6">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by name, type, or file ID..."
+                className="flex-1 px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg focus:border-blue-500 focus:outline-none"
+              />
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                className="px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg focus:border-blue-500 focus:outline-none"
+              >
+                <option value="newest">Newest first</option>
+                <option value="oldest">Oldest first</option>
+                <option value="name">Name (A-Z)</option>
+                <option value="versions">Most versions</option>
+              </select>
             </div>
+
+            {/* Files List */}
+            {filteredFiles.length === 0 ? (
+              <div className="text-center py-12 text-gray-400">
+                No files match your search.
+              </div>
+            ) : (
+              <div className="grid gap-4">
+                {filteredFiles.map((file) => (
+                  <FileCard key={file.fileId} file={file} />
+                ))}
+              </div>
+            )}
           </>
         )}
       </div>
@@ -158,7 +268,7 @@ export default function DashboardPage() {
   );
 }
 
-function FileCard({ file }: { file: FileObject }) {
+function FileCard({ file }: { file: DashboardFile }) {
   return (
     <Link href={`/files/${file.objectId}`}>
       <div className="bg-gray-800/50 backdrop-blur-lg rounded-xl p-6 border border-gray-700 hover:border-blue-500 transition cursor-pointer">
@@ -170,13 +280,18 @@ function FileCard({ file }: { file: FileObject }) {
                 <span className="text-gray-500">Type:</span> {file.mimeType || 'Unknown'}
               </span>
               <span>
-                <span className="text-gray-500">Versions:</span> {file.latestVersion}
+                <span className="text-gray-500">Versions:</span> {file.versionCount ?? file.latestVersion}
               </span>
+              {file.totalSize !== undefined && file.totalSize > 0 && (
+                <span>
+                  <span className="text-gray-500">Size:</span> {formatBytes(file.totalSize)}
+                </span>
+              )}
               <span>
                 <span className="text-gray-500">Created:</span> {formatDate(file.createdAt)}
               </span>
             </div>
-            <p className="text-xs text-gray-500 mt-2 font-mono">
+            <p className="text-xs text-gray-500 mt-2 font-mono truncate">
               {file.fileId}
             </p>
           </div>

@@ -43,6 +43,7 @@ export function useFileHistory(fileObjectId: string) {
 
         const fields = fileObject.data.content.fields as any;
         const file: FileObject = {
+          objectId: fileObject.data.objectId,
           fileId: fields.file_id,
           owner: fields.owner,
           latestVersion: parseInt(fields.latest_version),

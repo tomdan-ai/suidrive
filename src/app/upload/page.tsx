@@ -11,7 +11,6 @@ import { useCurrentAccount, useSignAndExecuteTransaction } from '@mysten/dapp-ki
 import { WalletButton } from '@/components/WalletButton';
 import { suiClientEnhanced } from '@/lib/sui/client';
 import { walrusClient } from '@/lib/walrus/client';
-import { analyzeFile } from '@/lib/ai/analyze';
 import { generateFileId, generateVersionId, readFileAsText } from '@/lib/utils';
 import type { UploadProgress } from '@/types';
 
@@ -25,13 +24,18 @@ function UploadPageContent() {
   const [progress, setProgress] = useState<UploadProgress | null>(null);
   const [result, setResult] = useState<any>(null);
   const [existingFileId, setExistingFileId] = useState<string | null>(null);
+  const [existingObjectId, setExistingObjectId] = useState<string | null>(null);
   const [versionNumber, setVersionNumber] = useState<number>(1);
 
   // Check if we're uploading a new version
   useEffect(() => {
     const fileIdParam = searchParams.get('fileId');
+    const objectIdParam = searchParams.get('objectId');
     if (fileIdParam) {
       setExistingFileId(fileIdParam);
+      if (objectIdParam) {
+        setExistingObjectId(objectIdParam);
+      }
       // Fetch the file to get the current version count
       fetchVersionCount(fileIdParam);
     }
@@ -75,18 +79,27 @@ function UploadPageContent() {
       setProgress({ stage: 'uploading', progress: 30, message: 'Uploading to Walrus...' });
       const { blobId } = await walrusClient.uploadFile(file);
 
-      // Step 3: AI Analysis
+      // Step 3: AI Analysis (via server-side API to keep keys safe)
       setProgress({ stage: 'analyzing', progress: 50, message: 'Analyzing file with AI...' });
       let aiSummary = '';
       try {
         const fileContent = await readFileAsText(file);
         if (fileContent) {
-          const analysis = await analyzeFile({
-            fileName: file.name,
-            mimeType: file.type,
-            fileContent,
+          const analyzeResp = await fetch('/api/analyze', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              fileName: file.name,
+              mimeType: file.type,
+              fileContent,
+            }),
           });
-          aiSummary = analysis.summary;
+          if (analyzeResp.ok) {
+            const data = await analyzeResp.json();
+            aiSummary = data.summary || '';
+          } else {
+            console.warn('AI analysis returned non-OK:', await analyzeResp.text());
+          }
         }
       } catch (error) {
         console.warn('AI analysis failed:', error);
@@ -165,6 +178,7 @@ function UploadPageContent() {
       setResult({
         success: true,
         fileId,
+        objectId: existingObjectId, // For new versions, use the existing object ID for routing
         versionId,
         blobId,
         transactionDigest: txDigest,
@@ -318,7 +332,7 @@ function UploadPageContent() {
                     </div>
                     {result.isNewVersion && (
                       <a
-                        href={`/files/${result.fileId}`}
+                        href={`/files/${result.objectId || result.fileId}`}
                         className="mt-4 block w-full py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold text-center transition"
                       >
                         View File History

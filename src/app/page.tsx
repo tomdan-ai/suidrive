@@ -23,7 +23,7 @@ export default function Home() {
           </p>
 
           {/* CTA Buttons */}
-          <div className="flex gap-4 justify-center mb-20">
+          <div className="flex gap-4 justify-center flex-wrap mb-20">
             <Link
               href="/upload"
               className="px-8 py-4 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold text-lg transition"
@@ -35,6 +35,12 @@ export default function Home() {
               className="px-8 py-4 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold text-lg transition"
             >
               View Dashboard
+            </Link>
+            <Link
+              href="/verify"
+              className="px-8 py-4 bg-green-700 hover:bg-green-600 rounded-lg font-semibold text-lg transition"
+            >
+              🔍 Verify File
             </Link>
           </div>
 
