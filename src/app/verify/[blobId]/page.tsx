@@ -239,6 +239,12 @@ export default function VerifyBlobPage({ params }: { params: Promise<{ blobId: s
                       >
                         Open Raw Blob ↗
                       </a>
+                      <a
+                        href={`/proof/${encodeURIComponent(decodedBlobId)}${onChainRecord ? `?fileName=${encodeURIComponent(onChainRecord.fileName || '')}&owner=${encodeURIComponent(onChainRecord.owner)}&timestamp=${onChainRecord.timestamp}&versionId=${encodeURIComponent(onChainRecord.versionId)}&fileId=${encodeURIComponent(onChainRecord.fileId)}&mimeType=${encodeURIComponent(onChainRecord.mimeType || '')}` : ''}`}
+                        className="inline-block px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm font-semibold transition"
+                      >
+                        📜 Export Certificate
+                      </a>
                     </div>
                   </div>
                 ) : (

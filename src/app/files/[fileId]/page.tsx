@@ -3,24 +3,31 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useFileHistory } from '@/hooks/useFileHistory';
+import { useCurrentAccount } from '@mysten/dapp-kit';
 import { WalletButton } from '@/components/WalletButton';
+import { ShareDialog } from '@/components/ShareDialog';
 import { formatDate, formatBytes } from '@/lib/utils';
 import type { TimelineVersion } from '@/types';
 import {
   ChevronLeft, History, ShieldCheck, Zap,
   Download, ExternalLink, Sparkles, Clock,
-  FileText, Database, Layers
+  FileText, Database, Layers, Share2
 } from 'lucide-react';
 
 export default function FileDetailPage({ params }: { params: Promise<{ fileId: string }> }) {
   // --- BOSS'S LOGIC START ---
   const { fileId } = React.use(params);
   const { fileHistory, loading, error } = useFileHistory(fileId);
+  const account = useCurrentAccount();
   const [selectedVersion, setSelectedVersion] = useState<TimelineVersion | null>(null);
+  const [shareOpen, setShareOpen] = useState(false);
 
   const latestVersion = fileHistory?.versions && fileHistory.versions.length > 0
     ? fileHistory.versions[fileHistory.versions.length - 1]
     : null;
+
+  // Check if any version is encrypted
+  const isEncrypted = fileHistory?.versions.some((v) => v.summary?.includes('[enc:salt=')) || false;
   // --- BOSS'S LOGIC END ---
 
   if (loading) return (
@@ -98,6 +105,12 @@ export default function FileDetailPage({ params }: { params: Promise<{ fileId: s
               >
                 Upload New Version
               </Link>
+              <button
+                onClick={() => setShareOpen(true)}
+                className="w-full py-4 bg-green-600/10 border border-green-500/20 rounded-2xl font-black uppercase tracking-widest text-[10px] text-center hover:bg-green-600/20 text-green-400 transition flex items-center justify-center gap-2"
+              >
+                <Share2 size={14} /> Share
+              </button>
             </div>
           </div>
         </div>
@@ -148,7 +161,7 @@ export default function FileDetailPage({ params }: { params: Promise<{ fileId: s
                       <div className="space-y-3">
                          <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Protocol Preview</p>
                          <div className="rounded-2xl overflow-hidden bg-black/40 border border-white/5">
-                            <FilePreview blobId={v.blobId} mimeType={fileHistory.file.mimeType} fileName={fileHistory.file.name} />
+                            <FilePreview blobId={v.blobId} mimeType={fileHistory.file.mimeType} fileName={fileHistory.file.name} summary={v.summary} />
                          </div>
                       </div>
 
@@ -168,6 +181,18 @@ export default function FileDetailPage({ params }: { params: Promise<{ fileId: s
           </div>
         </div>
       </main>
+
+      {/* Share Dialog */}
+      {fileHistory && latestVersion && (
+        <ShareDialog
+          isOpen={shareOpen}
+          onClose={() => setShareOpen(false)}
+          blobId={latestVersion.blobId}
+          fileName={fileHistory.file.name || 'Unnamed File'}
+          isEncrypted={isEncrypted}
+          ownerAddress={fileHistory.file.owner}
+        />
+      )}
     </div>
   );
 }
@@ -176,33 +201,109 @@ function InfoBlock({ label, value, mono, small }: any) {
   return (
     <div>
       <p className="text-[9px] font-bold text-gray-600 uppercase tracking-[3px] mb-1.5">{label}</p>
-      <p className={`${mono ? 'font-mono' : 'font-black italic'} ${small ? 'text-[10px]' : 'text-sm'} text-white/80 break-all leading-tight uppercase`}>{value}</p>
+      <p className={`${mono ? 'font-mono' : 'font-black italic'} ${small ? 'text-[10px]' : 'text-sm'} text-white/80 break-all leading-tight uppercase`}>
+        {value}
+      </p>
     </div>
   );
 }
 
-// RESTORED BOSS'S PREVIEW COMPONENT
-function FilePreview({ blobId, mimeType, fileName }: { blobId: string; mimeType?: string; fileName?: string }) {
+function FilePreview({ blobId, mimeType, fileName, summary }: { blobId: string; mimeType?: string; fileName?: string; summary?: string }) {
   const [textContent, setTextContent] = React.useState<string | null>(null);
+  const [decryptedUrl, setDecryptedUrl] = React.useState<string | null>(null);
+  const [decrypting, setDecrypting] = React.useState(false);
+  const [decryptError, setDecryptError] = React.useState<string | null>(null);
+
   const aggregatorUrl = process.env.NEXT_PUBLIC_WALRUS_AGGREGATOR_URL || 'https://aggregator.walrus-testnet.walrus.space';
   const walrusUrl = `${aggregatorUrl}/v1/blobs/${blobId}`;
 
-  if (mimeType?.startsWith('image/')) return (
-    <div className="p-4 flex justify-center bg-white/[0.02]"><img src={walrusUrl} alt={fileName} className="max-w-full max-h-96 rounded-xl shadow-2xl" /></div>
-  );
-  if (mimeType?.startsWith('video/')) return (
-    <div className="p-4"><video controls className="w-full rounded-xl"><source src={walrusUrl} type={mimeType} /></video></div>
-  );
-  if (mimeType === 'application/pdf') return (
-    <iframe src={walrusUrl} className="w-full h-96 bg-white" />
-  );
-  if (mimeType?.startsWith('text/') || mimeType === 'application/json') {
-    if (textContent === null) fetch(walrusUrl).then(r => r.text()).then(t => setTextContent(t.slice(0, 4000)));
+  // Detect encryption from summary metadata: [enc:salt=HEXHEX]
+  const encMatch = summary?.match(/\[enc:salt=([a-f0-9]+)\]/i);
+  const isEncrypted = !!encMatch;
+  const encSalt = encMatch?.[1] || '';
+
+  // If encrypted and not yet decrypted, show decrypt button
+  if (isEncrypted && !decryptedUrl) {
     return (
-      <div className="p-6 max-h-64 overflow-auto bg-[#01060b] font-mono text-[11px] text-cyan-400/80 leading-relaxed">
-        <pre className="whitespace-pre-wrap">{textContent ?? 'Decoding Binary...'}</pre>
+      <div className="p-8 text-center space-y-4 bg-white/[0.02] rounded-2xl border border-green-500/20">
+        <div className="text-3xl">🔒</div>
+        <p className="text-xs font-bold text-green-400 uppercase tracking-widest">Encrypted File</p>
+        <p className="text-[10px] text-gray-500 max-w-xs mx-auto">
+          This file was encrypted client-side before upload. Only the owner wallet can decrypt it.
+        </p>
+        {decryptError && (
+          <p className="text-[10px] text-red-400">{decryptError}</p>
+        )}
+        <button
+          onClick={async () => {
+            setDecrypting(true);
+            setDecryptError(null);
+            try {
+              const { decryptWalrusBlob } = await import('@/lib/crypto/encryption');
+              let walletAddress = '';
+              const stored = localStorage.getItem('@mysten/dapp-kit:last-connected-wallet-info');
+              if (stored) {
+                try {
+                  const parsed = JSON.parse(stored);
+                  walletAddress = parsed.accounts?.[0]?.address || '';
+                } catch {}
+              }
+              if (!walletAddress) {
+                throw new Error('Connect wallet to decrypt');
+              }
+              const decrypted = await decryptWalrusBlob(blobId, walletAddress, encSalt);
+              const blob = new Blob([decrypted], { type: mimeType || 'application/octet-stream' });
+              const url = URL.createObjectURL(blob);
+              setDecryptedUrl(url);
+            } catch (err) {
+              setDecryptError(err instanceof Error ? err.message : 'Decryption failed');
+            } finally {
+              setDecrypting(false);
+            }
+          }}
+          disabled={decrypting}
+          className="px-6 py-3 bg-green-600 hover:bg-green-500 disabled:bg-gray-700 rounded-xl text-xs font-bold uppercase tracking-widest transition-all"
+        >
+          {decrypting ? 'Decrypting...' : '🔓 Decrypt & Preview'}
+        </button>
       </div>
     );
   }
-  return <div className="p-10 text-center text-gray-600 text-[10px] font-bold uppercase tracking-widest">Preview Protocol Unavailable</div>;
+
+  const displayUrl = decryptedUrl || walrusUrl;
+
+  if (mimeType?.startsWith('image/')) {
+    return (
+      <div className="p-4 flex justify-center bg-white/[0.02]">
+        <img src={displayUrl} alt={fileName} className="max-w-full max-h-96 rounded-xl shadow-2xl" />
+      </div>
+    );
+  }
+  if (mimeType?.startsWith('video/')) {
+    return (
+      <div className="p-4">
+        <video controls className="w-full rounded-xl">
+          <source src={displayUrl} type={mimeType} />
+        </video>
+      </div>
+    );
+  }
+  if (mimeType === 'application/pdf') {
+    return <iframe src={displayUrl} className="w-full h-96 bg-white rounded-xl" />;
+  }
+  if (mimeType?.startsWith('text/') || mimeType === 'application/json') {
+    if (textContent === null) {
+      fetch(displayUrl).then(r => r.text()).then(t => setTextContent(t.slice(0, 4000)));
+    }
+    return (
+      <div className="p-6 max-h-64 overflow-auto bg-[#01060b] font-mono text-[11px] text-cyan-400/80 leading-relaxed">
+        <pre className="whitespace-pre-wrap">{textContent ?? 'Decoding...'}</pre>
+      </div>
+    );
+  }
+  return (
+    <div className="p-10 text-center text-gray-600 text-[10px] font-bold uppercase tracking-widest">
+      Preview Protocol Unavailable
+    </div>
+  );
 }

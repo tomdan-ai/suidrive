@@ -184,7 +184,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-4">
             <WalletButton />
             <Link href="/upload" className="bg-cyan-400 text-black px-6 py-2.5 rounded-full font-black text-xs uppercase tracking-widest flex items-center gap-2 hover:scale-105 transition shadow-[0_0_30px_rgba(34,211,238,0.3)]">
               <Upload size={16} /> Upload

@@ -114,6 +114,32 @@ export interface UserProfile {
 }
 
 // ============================================================================
+// Sharing Types
+// ============================================================================
+
+export type ShareAccess = 'viewer'; // Can be extended to 'editor' in future
+
+export interface ShareGrant {
+  /** Recipient wallet address */
+  address: string;
+  /** Access level */
+  access: ShareAccess;
+  /** When the share was created */
+  grantedAt: number;
+  /** For encrypted files: salt to derive decryption key for this recipient */
+  encryptionSalt?: string;
+}
+
+export interface ShareSettings {
+  /** Is the file publicly accessible via link? (only for unencrypted files) */
+  isPublic: boolean;
+  /** List of wallets that have been granted access */
+  grants: ShareGrant[];
+  /** Shareable link (for public files) */
+  shareLink?: string;
+}
+
+// ============================================================================
 // UI Types
 // ============================================================================
 

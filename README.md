@@ -446,10 +446,11 @@ suidrive/
 | 3 | Version history + timeline UI | ✅ |
 | 4 | AI analysis + version comparison | ✅ |
 | 5 | Dashboard + public verification portal | ✅ |
-| 6 | Client-side encryption (AES-GCM) before upload | ☐ |
-| 7 | File sharing (signed access links, JWT-auth publisher) | ☐ |
-| 8 | Exportable proof certificates (PDF/JSON) | ☐ |
-| 9 | Mainnet deploy | ☐ |
+| 6 | Client-side encryption (AES-GCM) before upload | ✅ |
+| 7 | File sharing (public links + wallet-based access) | ✅ |
+| 8 | Exportable proof certificates (PDF/JSON) | ✅ |
+| 9 | AI Assistant (natural language file search) | ✅ |
+| 10 | Mainnet deploy | ☐ |
 
 ---
 

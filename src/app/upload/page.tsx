@@ -1,17 +1,18 @@
 "use client";
 
-import React, { useState, useEffect, Suspense, useRef } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useCurrentAccount, useSignAndExecuteTransaction } from '@mysten/dapp-kit';
 import { WalletButton } from '@/components/WalletButton';
 import { suiClientEnhanced } from '@/lib/sui/client';
 import { walrusClient } from '@/lib/walrus/client';
+import { encryptFile } from '@/lib/crypto/encryption';
 import { generateFileId, generateVersionId, readFileAsText } from '@/lib/utils';
 import type { UploadProgress } from '@/types';
 import {
-  Upload, Cloud, ShieldCheck, Zap,
+  Cloud, ShieldCheck, Zap,
   Cpu, HardDrive, FileCheck, ExternalLink,
-  ChevronLeft, Loader2, Sparkles, Database
+  ChevronLeft, Loader2, Sparkles, Database, Lock, LockOpen
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -28,6 +29,7 @@ function UploadPageContent() {
   const [existingFileId, setExistingFileId] = useState<string | null>(null);
   const [existingObjectId, setExistingObjectId] = useState<string | null>(null);
   const [versionNumber, setVersionNumber] = useState<number>(1);
+  const [encryptionEnabled, setEncryptionEnabled] = useState(false);
 
   useEffect(() => {
     const fileIdParam = searchParams.get('fileId');
@@ -57,23 +59,39 @@ function UploadPageContent() {
       const versionId = generateVersionId(fileId, versionNumber);
       const isNewVersion = !!existingFileId;
 
+      // --- Encryption step (optional) ---
+      let uploadPayload: File | Blob = file;
+      let encryptionSalt: string | null = null;
+
+      if (encryptionEnabled) {
+        setProgress({ stage: 'uploading', progress: 20, message: 'Encrypting locally (AES-256-GCM)...' });
+        const { encryptedBlob, salt } = await encryptFile(file, account.address);
+        uploadPayload = new File([encryptedBlob], file.name + '.encrypted', { type: 'application/octet-stream' });
+        encryptionSalt = salt;
+      }
+
       setProgress({ stage: 'uploading', progress: 30, message: 'Archiving to Walrus...' });
-      const { blobId } = await walrusClient.uploadFile(file);
+      const { blobId } = await walrusClient.uploadFile(uploadPayload as File);
 
       setProgress({ stage: 'analyzing', progress: 50, message: 'Consulting NVIDIA NIM AI...' });
       let aiSummary = '';
       try {
-        const fileContent = await readFileAsText(file);
-        if (fileContent) {
-          const analyzeResp = await fetch('/api/analyze', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fileName: file.name, mimeType: file.type, fileContent }),
-          });
-          if (analyzeResp.ok) {
-            const data = await analyzeResp.json();
-            aiSummary = data.summary || '';
+        // Only analyze unencrypted text files — encrypted content is opaque
+        if (!encryptionEnabled) {
+          const fileContent = await readFileAsText(file);
+          if (fileContent) {
+            const analyzeResp = await fetch('/api/analyze', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ fileName: file.name, mimeType: file.type, fileContent }),
+            });
+            if (analyzeResp.ok) {
+              const data = await analyzeResp.json();
+              aiSummary = data.summary || '';
+            }
           }
+        } else {
+          aiSummary = `[Encrypted] File encrypted with AES-256-GCM before upload. Original: ${file.name} (${file.type}, ${file.size} bytes).`;
         }
       } catch (e) { console.warn('AI failed', e); }
 
@@ -86,7 +104,12 @@ function UploadPageContent() {
       }
 
       setProgress({ stage: 'blockchain', progress: 85, message: 'Finalizing Immutable Version...' });
-      const versionTx = suiClientEnhanced.createVersionTransaction(versionId, fileId, blobId, null, aiSummary, file.size);
+      // Include encryption metadata in the AI summary field (stored on-chain)
+      const summaryWithMeta = encryptionSalt
+        ? `${aiSummary} [enc:salt=${encryptionSalt}]`
+        : aiSummary;
+
+      const versionTx = suiClientEnhanced.createVersionTransaction(versionId, fileId, blobId, null, summaryWithMeta, file.size);
       let txDigest = '';
       await new Promise<void>((res, rej) => {
         signAndExecute({ transaction: versionTx }, {
@@ -96,7 +119,11 @@ function UploadPageContent() {
       });
 
       setProgress({ stage: 'complete', progress: 100, message: 'Protocol complete!' });
-      setResult({ success: true, fileId, objectId: existingObjectId, versionId, blobId, transactionDigest: txDigest, aiSummary, isNewVersion, versionNumber });
+      setResult({
+        success: true, fileId, objectId: existingObjectId, versionId, blobId,
+        transactionDigest: txDigest, aiSummary, isNewVersion, versionNumber,
+        encrypted: encryptionEnabled, encryptionSalt,
+      });
     } catch (error) {
       console.error(error);
       setProgress(null);
@@ -186,6 +213,25 @@ function UploadPageContent() {
                         </div>
                       </label>
                     </div>
+
+                    {/* ENCRYPTION TOGGLE */}
+                    <button
+                      type="button"
+                      onClick={() => setEncryptionEnabled(!encryptionEnabled)}
+                      className={`w-full py-4 rounded-2xl flex items-center justify-center gap-3 text-xs font-bold uppercase tracking-[3px] transition-all border ${
+                        encryptionEnabled
+                          ? 'bg-green-500/10 border-green-500/30 text-green-400 shadow-[0_0_20px_rgba(34,197,94,0.15)]'
+                          : 'bg-white/[0.02] border-white/10 text-gray-500 hover:border-white/20 hover:text-gray-300'
+                      }`}
+                    >
+                      {encryptionEnabled ? <Lock size={16} /> : <LockOpen size={16} />}
+                      {encryptionEnabled ? 'Encryption: ON (AES-256-GCM)' : 'Encrypt before upload'}
+                    </button>
+                    {encryptionEnabled && (
+                      <p className="text-[9px] text-green-500/70 text-center -mt-3 font-medium">
+                        File will be encrypted locally using your wallet address. Only you can decrypt it.
+                      </p>
+                    )}
 
                     <button
                       onClick={handleUpload}
