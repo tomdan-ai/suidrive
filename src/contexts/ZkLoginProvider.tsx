@@ -257,17 +257,16 @@ function ZkLoginInnerProvider({ children }: { children: ReactNode }) {
         try {
           transaction.setSender(zkAccount.address);
 
-          // Step 1: Build raw transaction (no gas info yet)
-          const rawTxBytes = await transaction.build({ client: suiClient });
-          const rawTxBase64 = toBase64(rawTxBytes);
+          // Step 1: Serialize unbuilt transaction and send to sponsor
+          const serializedTx = transaction.serialize();
+          const txBase64 = btoa(serializedTx);
 
-          // Step 2: Send to sponsor API to add gas ownership
           const prepareRes = await fetch('/api/sponsor', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               action: 'prepare',
-              txBytes: rawTxBase64,
+              txBytes: txBase64,
               sender: zkAccount.address,
             }),
           });
@@ -280,7 +279,7 @@ function ZkLoginInnerProvider({ children }: { children: ReactNode }) {
           const { txBytes: sponsoredTxBase64 } = await prepareRes.json();
           const sponsoredTxBytes = fromBase64(sponsoredTxBase64);
 
-          // Step 3: Sign with user's ephemeral key + create zkLogin signature
+          // Step 2: Sign the BUILT bytes with user's ephemeral key
           const { signature: userSignature } =
             await zkSession.ephemeralKeypair.signTransaction(sponsoredTxBytes);
 
@@ -290,7 +289,7 @@ function ZkLoginInnerProvider({ children }: { children: ReactNode }) {
             maxEpoch: zkSession.maxEpoch,
           });
 
-          // Step 4: Execute — sponsor co-signs and submits
+          // Step 3: Execute — sponsor co-signs and submits
           const executeRes = await fetch('/api/sponsor', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -318,16 +317,16 @@ function ZkLoginInnerProvider({ children }: { children: ReactNode }) {
         try {
           transaction.setSender(walletAccount.address);
 
-          // Step 1: Get sponsored tx from server
-          const rawTxBytes = await transaction.build({ client: suiClient });
-          const rawTxBase64 = toBase64(rawTxBytes);
+          // Step 1: Serialize unbuilt transaction and send to sponsor
+          const serializedTx = transaction.serialize();
+          const txBase64 = btoa(serializedTx);
 
           const prepareRes = await fetch('/api/sponsor', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               action: 'prepare',
-              txBytes: rawTxBase64,
+              txBytes: txBase64,
               sender: walletAccount.address,
             }),
           });

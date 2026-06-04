@@ -14,6 +14,7 @@ interface ShareDialogProps {
   onClose: () => void;
   blobId: string;
   fileName: string;
+  mimeType?: string;
   isEncrypted: boolean;
   ownerAddress: string;
   existingGrants?: ShareGrant[];
@@ -25,6 +26,7 @@ export function ShareDialog({
   onClose,
   blobId,
   fileName,
+  mimeType,
   isEncrypted,
   ownerAddress,
   existingGrants = [],
@@ -39,7 +41,7 @@ export function ShareDialog({
   );
 
   const shareUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}/share/${encodeURIComponent(blobId)}`
+    ? `${window.location.origin}/share/${encodeURIComponent(blobId)}${mimeType ? `?type=${encodeURIComponent(mimeType)}` : ''}${fileName ? `${mimeType ? '&' : '?'}name=${encodeURIComponent(fileName)}` : ''}`
     : '';
 
   const handleCopyLink = () => {

@@ -23,6 +23,18 @@ export default function SharePage({ params }: { params: Promise<{ blobId: string
   const decodedBlobId = decodeURIComponent(blobId);
   const walrusUrl = `${AGGREGATOR_URL}/v1/blobs/${decodedBlobId}`;
 
+  // Read mime type and filename from query params (set by ShareDialog)
+  const [queryType, setQueryType] = useState<string | null>(null);
+  const [queryName, setQueryName] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      setQueryType(params.get('type'));
+      setQueryName(params.get('name'));
+    }
+  }, []);
+
   const [state, setState] = useState<PageState>({ status: 'loading' });
   const [retrying, setRetrying] = useState(false);
 
@@ -167,7 +179,9 @@ export default function SharePage({ params }: { params: Promise<{ blobId: string
   }
 
   // --- Ready: Show file ---
-  const contentType = state.meta.contentType;
+  // Prefer mime type from query params (reliable), fall back to response header
+  const contentType = queryType || state.meta.contentType || 'application/octet-stream';
+  const fileName = queryName || 'download';
   const isImage = contentType.startsWith('image/');
   const isVideo = contentType.startsWith('video/');
   const isAudio = contentType.startsWith('audio/');

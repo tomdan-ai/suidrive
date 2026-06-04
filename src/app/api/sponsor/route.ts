@@ -1,15 +1,16 @@
 /**
  * Transaction Sponsorship API
  * 
- * Two-step flow for gas sponsorship:
- * 
- * Step 1: POST /api/sponsor (action: "prepare")
- *   - Client sends raw transaction bytes (before signing)
- *   - Server sets gas owner to sponsor, builds with gas, returns new tx bytes
- * 
- * Step 2: POST /api/sponsor (action: "execute")
- *   - Client sends the sponsor-prepared tx bytes + user's zkLogin signature
- *   - Server co-signs with sponsor key and executes
+ * Single-step flow:
+ * Client sends the serialized Transaction (not yet built/signed).
+ * Server sets gas owner, builds, signs as sponsor, and returns the 
+ * built bytes for the client to co-sign and send back for execution.
+ *
+ * Step 1: POST { action: "sponsor", txBytes, sender }
+ *   → Returns { txBytes (built with gas), sponsorAddress }
+ *
+ * Step 2: POST { action: "execute", txBytes, userSignature }
+ *   → Sponsor co-signs and executes, returns { digest }
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -22,7 +23,7 @@ import { fromBase64, toBase64 } from '@mysten/sui/utils';
 function getSponsorKeypair(): Ed25519Keypair {
   const secretKey = process.env.SUI_SPONSOR_SECRET_KEY;
   if (!secretKey) {
-    throw new Error('SUI_SPONSOR_SECRET_KEY not configured');
+    throw new Error('SUI_SPONSOR_SECRET_KEY not configured. Add your deployer private key to .env.local');
   }
   if (secretKey.startsWith('suiprivkey')) {
     return Ed25519Keypair.fromSecretKey(secretKey);
@@ -63,7 +64,7 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * Step 1: Prepare — set gas owner to sponsor and rebuild
+ * Step 1: Prepare — deserialize tx, set gas owner, build with sponsor's gas coins
  */
 async function handlePrepare(body: { txBytes: string; sender: string }) {
   const { txBytes, sender } = body;
@@ -75,28 +76,43 @@ async function handlePrepare(body: { txBytes: string; sender: string }) {
     );
   }
 
-  const sponsor = getSponsorKeypair();
-  const sponsorAddress = sponsor.toSuiAddress();
+  try {
+    const sponsor = getSponsorKeypair();
+    const sponsorAddress = sponsor.toSuiAddress();
 
-  // Parse the transaction kind (without gas info)
-  const tx = Transaction.from(fromBase64(txBytes));
+    // Deserialize the transaction — supports both built bytes and serialized JSON format
+    let tx: Transaction;
+    try {
+      // Try as raw built bytes first
+      tx = Transaction.from(fromBase64(txBytes));
+    } catch {
+      // Fall back to JSON serialized format (from Transaction.serialize())
+      const decoded = atob(txBytes);
+      tx = Transaction.from(decoded);
+    }
 
-  // Set the gas owner to the sponsor
-  tx.setGasOwner(sponsorAddress);
-  // Ensure sender is correct
-  tx.setSender(sender);
+    // Set gas payment from sponsor
+    tx.setSender(sender);
+    tx.setGasOwner(sponsorAddress);
 
-  // Rebuild with gas selection from sponsor's coins
-  const preparedBytes = await tx.build({ client: suiClient });
+    // Build — this resolves gas coins from the sponsor's account
+    const builtBytes = await tx.build({ client: suiClient });
 
-  return NextResponse.json({
-    txBytes: toBase64(preparedBytes),
-    sponsorAddress,
-  });
+    return NextResponse.json({
+      txBytes: toBase64(builtBytes),
+      sponsorAddress,
+    });
+  } catch (error) {
+    console.error('Sponsor prepare error:', error);
+    return NextResponse.json(
+      { error: `Prepare failed: ${error instanceof Error ? error.message : 'Unknown'}` },
+      { status: 500 }
+    );
+  }
 }
 
 /**
- * Step 2: Execute — sponsor co-signs and submits
+ * Step 2: Execute — sponsor co-signs the built bytes and submits with user's signature
  */
 async function handleExecute(body: { txBytes: string; userSignature: string }) {
   const { txBytes, userSignature } = body;
@@ -108,25 +124,33 @@ async function handleExecute(body: { txBytes: string; userSignature: string }) {
     );
   }
 
-  const sponsor = getSponsorKeypair();
+  try {
+    const sponsor = getSponsorKeypair();
+    const txBytesArray = fromBase64(txBytes);
 
-  // Sign with the sponsor's key
-  const txBytesArray = fromBase64(txBytes);
-  const { signature: sponsorSignature } = await sponsor.signTransaction(txBytesArray);
+    // Sponsor signs the same built bytes
+    const { signature: sponsorSignature } = await sponsor.signTransaction(txBytesArray);
 
-  // Execute with both signatures
-  const result = await suiClient.executeTransactionBlock({
-    transactionBlock: txBytesArray,
-    signature: [userSignature, sponsorSignature],
-    options: {
-      showEffects: true,
-      showObjectChanges: true,
-    },
-  });
+    // Execute with both signatures: [user, sponsor]
+    const result = await suiClient.executeTransactionBlock({
+      transactionBlock: txBytesArray,
+      signature: [userSignature, sponsorSignature],
+      options: {
+        showEffects: true,
+        showObjectChanges: true,
+      },
+    });
 
-  return NextResponse.json({
-    digest: result.digest,
-    effects: result.effects,
-    objectChanges: result.objectChanges,
-  });
+    return NextResponse.json({
+      digest: result.digest,
+      effects: result.effects,
+      objectChanges: result.objectChanges,
+    });
+  } catch (error) {
+    console.error('Sponsor execute error:', error);
+    return NextResponse.json(
+      { error: `Execute failed: ${error instanceof Error ? error.message : 'Unknown'}` },
+      { status: 500 }
+    );
+  }
 }
