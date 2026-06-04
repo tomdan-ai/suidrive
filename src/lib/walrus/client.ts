@@ -1,42 +1,36 @@
 /**
  * Walrus Client
- * Handles all interactions with Walrus decentralized storage
+ * Handles all interactions with Walrus decentralized storage.
+ * Uses a server-side proxy to avoid browser SSL/CORS issues with the Walrus testnet.
  */
-
-import { WalrusClient as BaseWalrusClient } from "@mysten/walrus";
-
-// Note: Walrus client will be fully initialized when wallet is connected
-// For now, we'll use mock data until Phase 2 wallet integration is complete
 
 /**
  * Enhanced Walrus client with additional utilities
  */
 export class WalrusClient {
   /**
-   * Upload a file to Walrus
-   * Returns the blob ID for permanent storage
+   * Upload a file to Walrus via our API proxy.
+   * The proxy handles the actual PUT to the Walrus publisher from the server side,
+   * avoiding browser SSL certificate issues with the testnet endpoint.
    */
   async uploadFile(file: File): Promise<{ blobId: string; suiRef?: string }> {
     try {
-      const publisherUrl = process.env.NEXT_PUBLIC_WALRUS_PUBLISHER_URL || 'https://publisher.walrus-testnet.walrus.space';
-      
-      // Walrus testnet requires epochs parameter
-      const epochs = 5; // Store for 5 epochs
-      
-      // Upload file directly to Walrus publisher
-      const response = await fetch(`${publisherUrl}/v1/blobs?epochs=${epochs}&force=true`, {
-        method: 'PUT',
-        body: file,
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch('/api/walrus/upload', {
+        method: 'POST',
+        body: formData,
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Walrus upload failed (${response.status}): ${errorText}`);
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `Upload failed (${response.status})`);
       }
 
       const data = await response.json();
-      
-      // Handle different response formats
+
+      // Handle different response formats from Walrus
       if (data.newlyCreated) {
         return {
           blobId: data.newlyCreated.blobObject.blobId,
@@ -52,7 +46,9 @@ export class WalrusClient {
       throw new Error('Unexpected Walrus response format');
     } catch (error) {
       console.error('Walrus upload error:', error);
-      throw new Error(`Failed to upload to Walrus: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(
+        `Failed to upload to Walrus: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
     }
   }
 
@@ -60,20 +56,23 @@ export class WalrusClient {
    * Retrieve a file from Walrus by blob ID
    */
   async getFile(blobId: string): Promise<Uint8Array> {
-    try {
-      // Phase 2: Implement real retrieval
-      throw new Error('Walrus retrieval not yet implemented');
-    } catch (error) {
-      console.error('Walrus retrieval error:', error);
-      throw new Error(`Failed to retrieve from Walrus: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    const url = this.getBlobUrl(blobId);
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Failed to retrieve blob ${blobId}: ${response.status}`);
     }
+    const buffer = await response.arrayBuffer();
+    return new Uint8Array(buffer);
   }
 
   /**
    * Get blob URL for direct access
    */
   getBlobUrl(blobId: string): string {
-    return `https://aggregator.walrus-testnet.walrus.space/v1/blobs/${blobId}`;
+    const aggregatorUrl =
+      process.env.NEXT_PUBLIC_WALRUS_AGGREGATOR_URL ||
+      'https://aggregator.walrus-testnet.walrus.space';
+    return `${aggregatorUrl}/v1/blobs/${blobId}`;
   }
 
   /**
@@ -81,8 +80,8 @@ export class WalrusClient {
    */
   async blobExists(blobId: string): Promise<boolean> {
     try {
-      // Phase 2: Implement real check
-      return false;
+      const response = await fetch(this.getBlobUrl(blobId), { method: 'HEAD' });
+      return response.ok;
     } catch {
       return false;
     }

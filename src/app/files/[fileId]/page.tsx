@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useFileHistory } from '@/hooks/useFileHistory';
-import { useCurrentAccount } from '@mysten/dapp-kit';
-import { WalletButton } from '@/components/WalletButton';
+import { useZkLogin } from '@/contexts/ZkLoginProvider';
+import { AuthButton } from '@/components/AuthButton';
 import { ShareDialog } from '@/components/ShareDialog';
 import { formatDate, formatBytes } from '@/lib/utils';
 import type { TimelineVersion } from '@/types';
@@ -18,7 +18,7 @@ export default function FileDetailPage({ params }: { params: Promise<{ fileId: s
   // --- BOSS'S LOGIC START ---
   const { fileId } = React.use(params);
   const { fileHistory, loading, error } = useFileHistory(fileId);
-  const account = useCurrentAccount();
+  const { address } = useZkLogin();
   const [selectedVersion, setSelectedVersion] = useState<TimelineVersion | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
 
@@ -65,7 +65,7 @@ export default function FileDetailPage({ params }: { params: Promise<{ fileId: s
           <Layers className="text-cyan-400" size={24} />
           <span className="text-2xl font-black tracking-tighter italic uppercase">Version Timeline</span>
         </div>
-        <WalletButton />
+        <AuthButton />
       </nav>
 
       <main className="relative z-10 max-w-[1600px] mx-auto w-full px-10 grid lg:grid-cols-12 gap-12 pb-20">
@@ -240,16 +240,17 @@ function FilePreview({ blobId, mimeType, fileName, summary }: { blobId: string; 
             setDecryptError(null);
             try {
               const { decryptWalrusBlob } = await import('@/lib/crypto/encryption');
+              // Get wallet address from zkLogin session
+              const accountData = localStorage.getItem('suidrive_zklogin_account');
               let walletAddress = '';
-              const stored = localStorage.getItem('@mysten/dapp-kit:last-connected-wallet-info');
-              if (stored) {
+              if (accountData) {
                 try {
-                  const parsed = JSON.parse(stored);
-                  walletAddress = parsed.accounts?.[0]?.address || '';
+                  const parsed = JSON.parse(accountData);
+                  walletAddress = parsed.address || '';
                 } catch {}
               }
               if (!walletAddress) {
-                throw new Error('Connect wallet to decrypt');
+                throw new Error('Sign in to decrypt');
               }
               const decrypted = await decryptWalrusBlob(blobId, walletAddress, encSalt);
               const blob = new Blob([decrypted], { type: mimeType || 'application/octet-stream' });

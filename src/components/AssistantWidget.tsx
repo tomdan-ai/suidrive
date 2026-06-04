@@ -8,8 +8,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { useCurrentAccount } from '@mysten/dapp-kit';
-import { useSuiClient } from '@/hooks/useSuiClient';
+import { useZkLogin } from '@/contexts/ZkLoginProvider';
 
 const PACKAGE_ID = process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || '';
 
@@ -33,8 +32,7 @@ interface FileContext {
 }
 
 export function AssistantWidget() {
-  const account = useCurrentAccount();
-  const client = useSuiClient();
+  const { address, suiClient: client } = useZkLogin();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -46,18 +44,18 @@ export function AssistantWidget() {
 
   // Load file context when widget opens and wallet is connected
   useEffect(() => {
-    if (!open || !account || !PACKAGE_ID || contextLoaded) return;
+    if (!open || !address || !PACKAGE_ID || contextLoaded) return;
 
     async function loadContext() {
       try {
         const fileObjects = await client.getOwnedObjects({
-          owner: account!.address,
+          owner: address!,
           filter: { StructType: `${PACKAGE_ID}::file_object::FileObject` },
           options: { showContent: true },
         });
 
         const versionObjects = await client.getOwnedObjects({
-          owner: account!.address,
+          owner: address!,
           filter: { StructType: `${PACKAGE_ID}::version_object::VersionObject` },
           options: { showContent: true },
         });
@@ -113,7 +111,7 @@ export function AssistantWidget() {
     }
 
     loadContext();
-  }, [open, account, client, contextLoaded]);
+  }, [open, address, client, contextLoaded]);
 
   // Auto-scroll messages
   useEffect(() => {
@@ -184,9 +182,9 @@ export function AssistantWidget() {
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-            {!account && (
+            {!address && (
               <div className="text-center py-8 text-gray-500 text-xs">
-                Connect wallet to chat about your files
+                Sign in with Google to chat about your files
               </div>
             )}
             {messages.map((msg, i) => (
@@ -233,11 +231,11 @@ export function AssistantWidget() {
                 onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
                 placeholder="Ask about your files..."
                 className="flex-1 px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-xs focus:border-blue-500 focus:outline-none placeholder:text-gray-600"
-                disabled={loading || !account}
+                disabled={loading || !address}
               />
               <button
                 onClick={handleSend}
-                disabled={!input.trim() || loading || !account}
+                disabled={!input.trim() || loading || !address}
                 className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-800 disabled:text-gray-600 rounded-lg text-xs font-bold transition"
               >
                 ↑

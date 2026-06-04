@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useCurrentAccount, useSignAndExecuteTransaction } from '@mysten/dapp-kit';
-import { WalletButton } from '@/components/WalletButton';
+import { useZkLogin } from '@/contexts/ZkLoginProvider';
+import { AuthButton, AuthOptions } from '@/components/AuthButton';
 import { suiClientEnhanced } from '@/lib/sui/client';
 import { walrusClient } from '@/lib/walrus/client';
 import { encryptFile } from '@/lib/crypto/encryption';
@@ -18,8 +18,7 @@ import Link from 'next/link';
 
 function UploadPageContent() {
   // --- BOSS'S LOGIC START ---
-  const account = useCurrentAccount();
-  const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+  const { account, address, signAndExecuteTransaction } = useZkLogin();
   const searchParams = useSearchParams();
  
   const [file, setFile] = useState<File | null>(null);
@@ -50,7 +49,7 @@ function UploadPageContent() {
   };
 
   const handleUpload = async () => {
-    if (!file || !account) return;
+    if (!file || !address) return;
     setUploading(true);
     setProgress({ stage: 'uploading', progress: 10, message: 'Preparing protocol...' });
 
@@ -65,7 +64,7 @@ function UploadPageContent() {
 
       if (encryptionEnabled) {
         setProgress({ stage: 'uploading', progress: 20, message: 'Encrypting locally (AES-256-GCM)...' });
-        const { encryptedBlob, salt } = await encryptFile(file, account.address);
+        const { encryptedBlob, salt } = await encryptFile(file, address);
         uploadPayload = new File([encryptedBlob], file.name + '.encrypted', { type: 'application/octet-stream' });
         encryptionSalt = salt;
       }
@@ -99,7 +98,7 @@ function UploadPageContent() {
         setProgress({ stage: 'blockchain', progress: 70, message: 'Minting Sui File Object...' });
         const fileTx = suiClientEnhanced.createFileTransaction(fileId, file.name, file.type);
         await new Promise<void>((res, rej) => {
-          signAndExecute({ transaction: fileTx }, { onSuccess: () => res(), onError: (e) => rej(e) });
+          signAndExecuteTransaction({ transaction: fileTx, onSuccess: () => res(), onError: (e) => rej(e) });
         });
       }
 
@@ -112,7 +111,7 @@ function UploadPageContent() {
       const versionTx = suiClientEnhanced.createVersionTransaction(versionId, fileId, blobId, null, summaryWithMeta, file.size);
       let txDigest = '';
       await new Promise<void>((res, rej) => {
-        signAndExecute({ transaction: versionTx }, {
+        signAndExecuteTransaction({ transaction: versionTx,
           onSuccess: (r) => { txDigest = r.digest; res(); },
           onError: (e) => rej(e)
         });
@@ -155,7 +154,7 @@ function UploadPageContent() {
           </div>
           <span className="text-2xl font-black tracking-tighter italic">SuiDrive</span>
         </div>
-        <WalletButton />
+        <AuthButton />
       </nav>
 
       {/* MAIN CHAMBER */}
@@ -180,14 +179,14 @@ function UploadPageContent() {
              <div className="absolute -inset-1 bg-gradient-to-r from-cyan-400/20 to-blue-600/20 rounded-[40px] blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
              <div className="relative h-full bg-[#050b14]/90 backdrop-blur-3xl border border-white/5 rounded-[40px] p-10 flex flex-col items-center justify-center transition-all duration-500 group-hover:border-cyan-400/30">
                
-                {!account ? (
+                {!address ? (
                   <div className="text-center space-y-6">
                     <div className="w-20 h-20 mx-auto bg-cyan-400/10 rounded-3xl flex items-center justify-center border border-cyan-400/20">
                       <Zap size={40} className="text-cyan-400" />
                     </div>
                     <h3 className="text-xl font-black uppercase italic">Protocol Locked</h3>
-                    <p className="text-gray-500 text-xs max-w-[200px] mx-auto font-medium">Connect your Sui wallet to unlock decentralized storage.</p>
-                    <WalletButton />
+                    <p className="text-gray-500 text-xs max-w-[200px] mx-auto font-medium">Sign in to unlock decentralized storage.</p>
+                    <AuthOptions />
                   </div>
                 ) : (
                   <div className="w-full space-y-10">

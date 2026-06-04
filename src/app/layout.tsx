@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { SuiWalletProvider } from "@/contexts/WalletProvider";
+import { ZkLoginProvider } from "@/contexts/ZkLoginProvider";
 import { AssistantWidget } from "@/components/AssistantWidget";
 import '@mysten/dapp-kit/dist/index.css';
 
@@ -31,10 +31,10 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <SuiWalletProvider>
+        <ZkLoginProvider>
           {children}
           <AssistantWidget />
-        </SuiWalletProvider>
+        </ZkLoginProvider>
       </body>
     </html>
   );

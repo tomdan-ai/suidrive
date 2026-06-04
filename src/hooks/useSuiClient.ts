@@ -1,12 +1,13 @@
 /**
  * Sui Client Hook
- * Provides access to Sui client from dapp-kit context
+ * Provides access to Sui client from zkLogin context
  */
 
 'use client';
 
-import { useSuiClient as useBaseSuiClient } from '@mysten/dapp-kit';
+import { useZkLogin } from '@/contexts/ZkLoginProvider';
 
 export function useSuiClient() {
-  return useBaseSuiClient();
+  const { suiClient } = useZkLogin();
+  return suiClient;
 }

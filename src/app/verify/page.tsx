@@ -8,7 +8,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { WalletButton } from '@/components/WalletButton';
+import { AuthButton } from '@/components/AuthButton';
 
 export default function VerifyPage() {
   const router = useRouter();
@@ -37,7 +37,7 @@ export default function VerifyPage() {
           <Link href="/" className="text-gray-400 hover:text-white transition">
             ← Home
           </Link>
-          <WalletButton />
+          <AuthButton />
         </div>
 
         <div className="max-w-3xl mx-auto">

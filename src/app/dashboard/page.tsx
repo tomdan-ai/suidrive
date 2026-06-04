@@ -2,9 +2,8 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { useCurrentAccount } from '@mysten/dapp-kit';
-import { useSuiClient } from '@/hooks/useSuiClient';
-import { WalletButton } from '@/components/WalletButton';
+import { useZkLogin } from '@/contexts/ZkLoginProvider';
+import { AuthButton, AuthOptions } from '@/components/AuthButton';
 import { formatDate, formatBytes } from '@/lib/utils';
 import type { FileObject } from '@/types';
 import {
@@ -23,8 +22,7 @@ interface DashboardFile extends FileObject {
 
 export default function DashboardPage() {
   // --- BOSS'S LOGIC START ---
-  const account = useCurrentAccount();
-  const client = useSuiClient();
+  const { address, suiClient: client } = useZkLogin();
   const [files, setFiles] = useState<DashboardFile[]>([]);
   const [loading, setLoading] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -32,20 +30,20 @@ export default function DashboardPage() {
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'name' | 'versions'>('newest');
 
   useEffect(() => {
-    if (!account || !PACKAGE_ID) return;
+    if (!address || !PACKAGE_ID) return;
 
     async function loadFiles() {
-      if (!account) return;
+      if (!address) return;
       setLoading(true);
       try {
         const fileObjects = await client.getOwnedObjects({
-          owner: account.address,
+          owner: address,
           filter: { StructType: `${PACKAGE_ID}::file_object::FileObject` },
           options: { showContent: true },
         });
 
         const versionObjects = await client.getOwnedObjects({
-          owner: account.address,
+          owner: address,
           filter: { StructType: `${PACKAGE_ID}::version_object::VersionObject` },
           options: { showContent: true },
         });
@@ -85,7 +83,7 @@ export default function DashboardPage() {
       finally { setLoading(false); }
     }
     loadFiles();
-  }, [account, client]);
+  }, [address, client]);
 
   const filteredFiles = useMemo(() => {
     let result = [...files];
@@ -185,7 +183,7 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-4">
-            <WalletButton />
+            <AuthButton />
             <Link href="/upload" className="bg-cyan-400 text-black px-6 py-2.5 rounded-full font-black text-xs uppercase tracking-widest flex items-center gap-2 hover:scale-105 transition shadow-[0_0_30px_rgba(34,211,238,0.3)]">
               <Upload size={16} /> Upload
             </Link>
@@ -193,14 +191,14 @@ export default function DashboardPage() {
         </header>
 
         <div className="px-10 pb-10">
-          {!account ? (
+          {!address ? (
             <div className="h-[60vh] flex flex-col items-center justify-center text-center">
               <div className="w-24 h-24 mb-6 bg-cyan-400/10 rounded-full flex items-center justify-center border border-cyan-400/20">
                 <ShieldCheck size={48} className="text-cyan-400" />
               </div>
-              <h2 className="text-3xl font-black italic uppercase mb-2">Wallet Disconnected</h2>
-              <p className="text-gray-500 mb-8 max-w-sm">Please connect your Sui wallet to access your permanent storage vault.</p>
-              <WalletButton />
+              <h2 className="text-3xl font-black italic uppercase mb-2">Not Signed In</h2>
+              <p className="text-gray-500 mb-8 max-w-sm">Sign in with Google or connect a wallet to access your permanent storage vault.</p>
+              <AuthOptions />
             </div>
           ) : loading ? (
             <div className="h-[60vh] flex flex-col items-center justify-center">

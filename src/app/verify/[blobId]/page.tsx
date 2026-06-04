@@ -8,7 +8,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useSuiClient } from '@/hooks/useSuiClient';
-import { WalletButton } from '@/components/WalletButton';
+import { AuthButton } from '@/components/AuthButton';
 import { formatDate, formatBytes, truncateAddress, getWalrusBlobUrl } from '@/lib/utils';
 
 const PACKAGE_ID = process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || '';
@@ -195,7 +195,7 @@ export default function VerifyBlobPage({ params }: { params: Promise<{ blobId: s
           <Link href="/verify" className="text-gray-400 hover:text-white transition">
             ← Verify another file
           </Link>
-          <WalletButton />
+          <AuthButton />
         </div>
 
         <div className="max-w-4xl mx-auto">
