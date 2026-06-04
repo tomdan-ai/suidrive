@@ -125,7 +125,16 @@ function UploadPageContent() {
       });
     } catch (error) {
       console.error(error);
-      setProgress(null);
+      const errMsg = error instanceof Error ? error.message : 'Unknown error';
+      if (errMsg.includes('Failed to fetch') || errMsg.includes('Walrus') || errMsg.includes('SSL') || errMsg.includes('network')) {
+        setProgress({ stage: 'uploading', progress: 0, message: '⚠️ Storage network unavailable. Walrus testnet may be experiencing issues. Please try again later.' });
+      } else if (errMsg.includes('Sponsor') || errMsg.includes('gas')) {
+        setProgress({ stage: 'blockchain', progress: 0, message: '⚠️ Transaction sponsorship failed. The gas sponsor may be out of funds.' });
+      } else if (errMsg.includes('Not authenticated') || errMsg.includes('sign in')) {
+        setProgress({ stage: 'blockchain', progress: 0, message: '⚠️ Session expired. Please sign in again.' });
+      } else {
+        setProgress({ stage: 'uploading', progress: 0, message: `⚠️ ${errMsg}` });
+      }
     } finally {
       setUploading(false);
     }

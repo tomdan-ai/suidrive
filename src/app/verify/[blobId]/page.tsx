@@ -50,11 +50,27 @@ export default function VerifyBlobPage({ params }: { params: Promise<{ blobId: s
 
         // Step 1: Verify blob exists on Walrus
         const walrusUrl = getWalrusBlobUrl(decodedBlobId, AGGREGATOR_URL);
-        const walrusResponse = await fetch(walrusUrl, { method: 'HEAD' });
+        let walrusResponse: Response;
+        try {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 15000);
+          walrusResponse = await fetch(walrusUrl, { method: 'HEAD', signal: controller.signal });
+          clearTimeout(timeout);
+        } catch (fetchErr) {
+          // Network failure (SSL error, timeout, etc.)
+          setBlobVerification({ exists: false });
+          setError('Unable to reach Walrus storage network. The testnet may be temporarily unavailable. Your file is still safe — please try again later.');
+          setLoading(false);
+          return;
+        }
 
         if (!walrusResponse.ok) {
           setBlobVerification({ exists: false });
-          setError('Blob not found on Walrus network');
+          if (walrusResponse.status === 404) {
+            setError('Blob not found on Walrus network. It may have expired or the ID is incorrect.');
+          } else {
+            setError(`Walrus returned an error (status ${walrusResponse.status}). Please try again.`);
+          }
           setLoading(false);
           return;
         }
@@ -72,7 +88,12 @@ export default function VerifyBlobPage({ params }: { params: Promise<{ blobId: s
         }
       } catch (err) {
         console.error('Verification error:', err);
-        setError(err instanceof Error ? err.message : 'Verification failed');
+        const msg = err instanceof Error ? err.message : 'Verification failed';
+        if (msg.includes('Failed to fetch') || msg.includes('AbortError') || msg.includes('network')) {
+          setError('Unable to connect to the network. Please check your connection and try again.');
+        } else {
+          setError(msg);
+        }
       } finally {
         setLoading(false);
       }
