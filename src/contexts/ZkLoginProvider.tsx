@@ -20,12 +20,14 @@ import React, {
 } from 'react';
 import { SuiJsonRpcClient } from '@mysten/sui/jsonRpc';
 import { Transaction } from '@mysten/sui/transactions';
+import { toBase64, fromBase64 } from '@mysten/sui/utils';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   createNetworkConfig,
   SuiClientProvider,
   WalletProvider,
   useCurrentAccount,
+  useSignTransaction,
   useSignAndExecuteTransaction,
   useDisconnectWallet,
 } from '@mysten/dapp-kit';
@@ -120,7 +122,7 @@ const suiClient = new SuiJsonRpcClient({
 function ZkLoginInnerProvider({ children }: { children: ReactNode }) {
   // --- dapp-kit wallet state ---
   const walletAccount = useCurrentAccount();
-  const { mutate: walletSignAndExecute } = useSignAndExecuteTransaction();
+  const { mutateAsync: walletSignTransaction } = useSignTransaction();
   const { mutate: disconnectWallet } = useDisconnectWallet();
 
   // --- zkLogin state ---
@@ -246,7 +248,7 @@ function ZkLoginInnerProvider({ children }: { children: ReactNode }) {
       const { transaction, onSuccess, onError } = params;
 
       if (authMethod === 'zklogin' && zkAccount && zkSession) {
-        // --- zkLogin signing path ---
+        // --- zkLogin signing path (with gas sponsorship) ---
         if (!zkAccount.zkProof) {
           onError?.(new Error('ZK proof not available. Please sign in again.'));
           return;
@@ -254,9 +256,33 @@ function ZkLoginInnerProvider({ children }: { children: ReactNode }) {
 
         try {
           transaction.setSender(zkAccount.address);
-          const txBytes = await transaction.build({ client: suiClient });
+
+          // Step 1: Build raw transaction (no gas info yet)
+          const rawTxBytes = await transaction.build({ client: suiClient });
+          const rawTxBase64 = toBase64(rawTxBytes);
+
+          // Step 2: Send to sponsor API to add gas ownership
+          const prepareRes = await fetch('/api/sponsor', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'prepare',
+              txBytes: rawTxBase64,
+              sender: zkAccount.address,
+            }),
+          });
+
+          if (!prepareRes.ok) {
+            const err = await prepareRes.json().catch(() => ({}));
+            throw new Error(err.error || 'Failed to prepare sponsored transaction');
+          }
+
+          const { txBytes: sponsoredTxBase64 } = await prepareRes.json();
+          const sponsoredTxBytes = fromBase64(sponsoredTxBase64);
+
+          // Step 3: Sign with user's ephemeral key + create zkLogin signature
           const { signature: userSignature } =
-            await zkSession.ephemeralKeypair.signTransaction(txBytes);
+            await zkSession.ephemeralKeypair.signTransaction(sponsoredTxBytes);
 
           const zkLoginSig = createZkLoginSignature({
             userSignature,
@@ -264,32 +290,88 @@ function ZkLoginInnerProvider({ children }: { children: ReactNode }) {
             maxEpoch: zkSession.maxEpoch,
           });
 
-          const result = await suiClient.executeTransactionBlock({
-            transactionBlock: txBytes,
-            signature: zkLoginSig,
-            options: { showEffects: true },
+          // Step 4: Execute — sponsor co-signs and submits
+          const executeRes = await fetch('/api/sponsor', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'execute',
+              txBytes: sponsoredTxBase64,
+              userSignature: zkLoginSig,
+            }),
           });
 
+          if (!executeRes.ok) {
+            const err = await executeRes.json().catch(() => ({}));
+            throw new Error(err.error || 'Sponsored transaction execution failed');
+          }
+
+          const result = await executeRes.json();
           onSuccess?.({ digest: result.digest });
         } catch (e) {
           const error = e instanceof Error ? e : new Error(String(e));
-          console.error('zkLogin transaction failed:', error);
+          console.error('zkLogin sponsored transaction failed:', error);
           onError?.(error);
         }
-      } else if (authMethod === 'wallet') {
-        // --- dapp-kit wallet signing path ---
-        walletSignAndExecute(
-          { transaction },
-          {
-            onSuccess: (result) => onSuccess?.({ digest: result.digest }),
-            onError: (e) => onError?.(e instanceof Error ? e : new Error(String(e))),
+      } else if (authMethod === 'wallet' && walletAccount) {
+        // --- Wallet signing path (also sponsored) ---
+        try {
+          transaction.setSender(walletAccount.address);
+
+          // Step 1: Get sponsored tx from server
+          const rawTxBytes = await transaction.build({ client: suiClient });
+          const rawTxBase64 = toBase64(rawTxBytes);
+
+          const prepareRes = await fetch('/api/sponsor', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'prepare',
+              txBytes: rawTxBase64,
+              sender: walletAccount.address,
+            }),
+          });
+
+          if (!prepareRes.ok) {
+            const err = await prepareRes.json().catch(() => ({}));
+            throw new Error(err.error || 'Failed to prepare sponsored transaction');
           }
-        );
+
+          const { txBytes: sponsoredTxBase64 } = await prepareRes.json();
+
+          // Step 2: User signs with their wallet
+          const { signature: walletSig } = await walletSignTransaction({
+            transaction: Transaction.from(fromBase64(sponsoredTxBase64)),
+          });
+
+          // Step 3: Execute with sponsor co-signature
+          const executeRes = await fetch('/api/sponsor', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'execute',
+              txBytes: sponsoredTxBase64,
+              userSignature: walletSig,
+            }),
+          });
+
+          if (!executeRes.ok) {
+            const err = await executeRes.json().catch(() => ({}));
+            throw new Error(err.error || 'Sponsored transaction execution failed');
+          }
+
+          const result = await executeRes.json();
+          onSuccess?.({ digest: result.digest });
+        } catch (e) {
+          const error = e instanceof Error ? e : new Error(String(e));
+          console.error('Wallet sponsored transaction failed:', error);
+          onError?.(error);
+        }
       } else {
         onError?.(new Error('Not authenticated. Please sign in or connect a wallet.'));
       }
     },
-    [authMethod, zkAccount, zkSession, walletSignAndExecute]
+    [authMethod, zkAccount, zkSession, walletAccount, walletSignTransaction]
   );
 
   const value: ZkLoginState = {
