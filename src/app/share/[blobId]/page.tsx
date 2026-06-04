@@ -12,6 +12,52 @@ import { AlertTriangle, RefreshCw, Download, Shield, ExternalLink } from 'lucide
 
 const AGGREGATOR_URL = process.env.NEXT_PUBLIC_WALRUS_AGGREGATOR_URL || 'https://aggregator.walrus-testnet.walrus.space';
 
+/**
+ * Detect mime type from file magic bytes (first few bytes of the file)
+ */
+function detectMimeType(bytes: Uint8Array): string | null {
+  if (bytes.length < 4) return null;
+
+  // PNG: 89 50 4E 47
+  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47) {
+    return 'image/png';
+  }
+  // JPEG: FF D8 FF
+  if (bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) {
+    return 'image/jpeg';
+  }
+  // GIF: 47 49 46 38
+  if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x38) {
+    return 'image/gif';
+  }
+  // WebP: 52 49 46 46 ... 57 45 42 50
+  if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+      bytes.length >= 12 && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) {
+    return 'image/webp';
+  }
+  // PDF: 25 50 44 46
+  if (bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46) {
+    return 'application/pdf';
+  }
+  // MP4: ... 66 74 79 70 (at offset 4)
+  if (bytes.length >= 8 && bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70) {
+    return 'video/mp4';
+  }
+  // ZIP: 50 4B 03 04
+  if (bytes[0] === 0x50 && bytes[1] === 0x4B && bytes[2] === 0x03 && bytes[3] === 0x04) {
+    return 'application/zip';
+  }
+
+  // Check if it looks like text/JSON (printable ASCII)
+  const isText = bytes.every(b => (b >= 0x09 && b <= 0x0D) || (b >= 0x20 && b <= 0x7E));
+  if (isText) {
+    if (bytes[0] === 0x7B) return 'application/json'; // starts with {
+    return 'text/plain';
+  }
+
+  return null;
+}
+
 type PageState =
   | { status: 'loading' }
   | { status: 'ready'; meta: { size: number; contentType: string } }
@@ -21,7 +67,6 @@ type PageState =
 export default function SharePage({ params }: { params: Promise<{ blobId: string }> }) {
   const { blobId } = React.use(params);
   const decodedBlobId = decodeURIComponent(blobId);
-  const walrusUrl = `${AGGREGATOR_URL}/v1/blobs/${decodedBlobId}`;
 
   // Read mime type and filename from query params (set by ShareDialog)
   const [queryType, setQueryType] = useState<string | null>(null);
@@ -35,6 +80,10 @@ export default function SharePage({ params }: { params: Promise<{ blobId: string
     }
   }, []);
 
+  // Proxy URL serves with correct Content-Type (built after state resolves below)
+  // Direct Walrus URL for initial check
+  const walrusUrl = `${AGGREGATOR_URL}/v1/blobs/${decodedBlobId}`;
+
   const [state, setState] = useState<PageState>({ status: 'loading' });
   const [retrying, setRetrying] = useState(false);
 
@@ -44,18 +93,30 @@ export default function SharePage({ params }: { params: Promise<{ blobId: string
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 15000);
 
+      // Fetch first few bytes to detect mime type from magic bytes
       const r = await fetch(walrusUrl, {
-        method: 'HEAD',
+        method: 'GET',
         signal: controller.signal,
+        headers: { 'Range': 'bytes=0-11' },
       });
       clearTimeout(timeout);
 
-      if (r.ok) {
+      if (r.ok || r.status === 206) {
+        const headerContentType = r.headers.get('content-type') || 'application/octet-stream';
+        const size = parseInt(r.headers.get('content-range')?.split('/')[1] || r.headers.get('content-length') || '0');
+
+        // Detect mime type from magic bytes if aggregator returns generic type
+        let detectedType = headerContentType;
+        if (headerContentType === 'application/octet-stream') {
+          const bytes = new Uint8Array(await r.arrayBuffer());
+          detectedType = detectMimeType(bytes) || 'application/octet-stream';
+        }
+
         setState({
           status: 'ready',
           meta: {
-            size: parseInt(r.headers.get('content-length') || '0'),
-            contentType: r.headers.get('content-type') || 'application/octet-stream',
+            size,
+            contentType: detectedType,
           },
         });
       } else if (r.status === 404) {
@@ -179,7 +240,7 @@ export default function SharePage({ params }: { params: Promise<{ blobId: string
   }
 
   // --- Ready: Show file ---
-  // Prefer mime type from query params (reliable), fall back to response header
+  // Prefer mime type from query params (reliable), fall back to detected type from magic bytes
   const contentType = queryType || state.meta.contentType || 'application/octet-stream';
   const fileName = queryName || 'download';
   const isImage = contentType.startsWith('image/');
@@ -187,6 +248,10 @@ export default function SharePage({ params }: { params: Promise<{ blobId: string
   const isAudio = contentType.startsWith('audio/');
   const isPdf = contentType === 'application/pdf';
   const isText = contentType.startsWith('text/') || contentType === 'application/json';
+
+  // Build proxy URLs with the resolved content type
+  const resolvedProxyUrl = `/api/blob/${encodeURIComponent(decodedBlobId)}?type=${encodeURIComponent(contentType)}&name=${encodeURIComponent(fileName)}`;
+  const resolvedDownloadUrl = `/api/blob/${encodeURIComponent(decodedBlobId)}?download=1&type=${encodeURIComponent(contentType)}&name=${encodeURIComponent(fileName)}`;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 text-white">
@@ -225,7 +290,7 @@ export default function SharePage({ params }: { params: Promise<{ blobId: string
               </div>
               <div className="flex gap-2">
                 <a
-                  href={walrusUrl}
+                  href={resolvedDownloadUrl}
                   download
                   className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-semibold transition"
                 >
@@ -244,31 +309,31 @@ export default function SharePage({ params }: { params: Promise<{ blobId: string
             <div className="p-6">
               {isImage && (
                 <div className="flex justify-center">
-                  <img src={walrusUrl} alt="Shared file" className="max-w-full max-h-[70vh] rounded-lg shadow-xl" />
+                  <img src={resolvedProxyUrl} alt="Shared file" className="max-w-full max-h-[70vh] rounded-lg shadow-xl" />
                 </div>
               )}
               {isVideo && (
                 <video controls className="w-full max-h-[70vh] rounded-lg">
-                  <source src={walrusUrl} type={contentType} />
+                  <source src={resolvedProxyUrl} type={contentType} />
                 </video>
               )}
               {isAudio && (
                 <div className="py-12 flex justify-center">
                   <audio controls className="w-full max-w-lg">
-                    <source src={walrusUrl} type={contentType} />
+                    <source src={resolvedProxyUrl} type={contentType} />
                   </audio>
                 </div>
               )}
               {isPdf && (
-                <iframe src={walrusUrl} className="w-full h-[70vh] rounded-lg bg-white" />
+                <iframe src={resolvedProxyUrl} className="w-full h-[70vh] rounded-lg bg-white" />
               )}
-              {isText && <TextPreview url={walrusUrl} />}
+              {isText && <TextPreview url={resolvedProxyUrl} />}
               {!isImage && !isVideo && !isAudio && !isPdf && !isText && (
                 <div className="text-center py-16">
                   <div className="text-5xl mb-4">📄</div>
                   <p className="text-gray-400 mb-4">Preview not available for this file type</p>
                   <a
-                    href={walrusUrl}
+                    href={resolvedDownloadUrl}
                     download
                     className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition"
                   >
