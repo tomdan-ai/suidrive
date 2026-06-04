@@ -2,38 +2,33 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { FileText, ChevronLeft, Search, Filter, HardDrive } from 'lucide-react';
+import { HardDrive, Upload } from 'lucide-react';
+import { DashboardLayout } from '@/components/layout/DashboardLayout';
 
 export default function MyFilesPage() {
   return (
-    <div className="min-h-screen bg-[#01060b] text-white font-sans selection:bg-cyan-400 overflow-hidden relative flex flex-col">
-      {/* Background Decor */}
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-cyan-500/5 blur-[120px]" />
-      </div>
-
-      <nav className="relative z-50 flex items-center justify-between px-10 py-8 max-w-[1600px] mx-auto w-full">
-        <Link href="/dashboard" className="flex items-center gap-2 text-gray-500 hover:text-cyan-400 transition-colors group">
-          <ChevronLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
-          <span className="text-[10px] font-bold uppercase tracking-[3px]">Back</span>
-        </Link>
-        <div className="flex items-center gap-3">
-          <FileText className="text-cyan-400" size={24} />
-          <span className="text-2xl font-black tracking-tighter italic uppercase">My Archives</span>
+    <DashboardLayout>
+      <div className="p-6 lg:p-8 max-w-7xl mx-auto">
+        <div className="mb-8">
+          <h1 className="text-2xl font-medium text-slate-800">My Files</h1>
+          <p className="text-sm text-slate-500 mt-1">All your personal files stored permanently on Walrus.</p>
         </div>
-        <div className="w-20" />
-      </nav>
 
-      <main className="relative z-10 flex-1 max-w-[1200px] mx-auto w-full px-6 py-10">
-        <div className="flex flex-col items-center justify-center h-[50vh] border-2 border-dashed border-white/5 rounded-[40px] bg-white/[0.01]">
-          <HardDrive size={48} className="text-gray-700 mb-6" />
-          <h2 className="text-2xl font-black italic uppercase">Vault Initialized</h2>
-          <p className="text-gray-500 text-xs mt-2 uppercase tracking-widest font-bold">Your immutable storage is active and ready.</p>
-          <Link href="/upload" className="mt-8 px-8 py-3 bg-cyan-400 text-black rounded-full font-black text-[10px] uppercase tracking-widest hover:scale-105 transition shadow-[0_0_30px_rgba(34,211,238,0.3)]">
-            Archive First File
+        <div className="flex flex-col items-center justify-center h-[50vh] border border-dashed border-slate-300 rounded-2xl bg-white shadow-sm p-8 text-center">
+          <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mb-6">
+            <HardDrive size={40} className="text-blue-500" />
+          </div>
+          <h2 className="text-xl font-semibold text-slate-800 mb-2">Your Drive is ready</h2>
+          <p className="text-slate-500 text-sm mb-8 max-w-sm">
+            Upload files to store them permanently and securely on the blockchain. 
+            They will appear here once uploaded.
+          </p>
+          <Link href="/upload" className="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium text-sm hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-2">
+            <Upload size={18} />
+            New Upload
           </Link>
         </div>
-      </main>
-    </div>
+      </div>
+    </DashboardLayout>
   );
 }

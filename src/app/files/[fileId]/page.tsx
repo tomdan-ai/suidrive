@@ -2,17 +2,19 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useFileHistory } from '@/hooks/useFileHistory';
 import { useZkLogin } from '@/contexts/ZkLoginProvider';
-import { AuthButton } from '@/components/AuthButton';
 import { ShareDialog } from '@/components/ShareDialog';
 import { formatDate, formatBytes } from '@/lib/utils';
 import type { TimelineVersion } from '@/types';
 import {
   ChevronLeft, History, ShieldCheck, Zap,
   Download, ExternalLink, Sparkles, Clock,
-  FileText, Database, Layers, Share2
+  FileText, Database, Layers, Share2, ArrowLeft,
+  Lock, AlertCircle
 } from 'lucide-react';
+import { DashboardLayout } from '@/components/layout/DashboardLayout';
 
 export default function FileDetailPage({ params }: { params: Promise<{ fileId: string }> }) {
   // --- BOSS'S LOGIC START ---
@@ -21,166 +23,166 @@ export default function FileDetailPage({ params }: { params: Promise<{ fileId: s
   const { address } = useZkLogin();
   const [selectedVersion, setSelectedVersion] = useState<TimelineVersion | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
+  const router = useRouter();
 
   const latestVersion = fileHistory?.versions && fileHistory.versions.length > 0
     ? fileHistory.versions[fileHistory.versions.length - 1]
     : null;
 
-  // Check if any version is encrypted
   const isEncrypted = fileHistory?.versions.some((v) => v.summary?.includes('[enc:salt=')) || false;
   // --- BOSS'S LOGIC END ---
 
   if (loading) return (
-    <div className="min-h-screen bg-[#01060b] flex flex-col items-center justify-center">
-      <div className="w-16 h-16 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin mb-4" />
-      <p className="text-cyan-400 font-mono text-[10px] uppercase tracking-[5px]">Reconstructing History...</p>
-    </div>
+    <DashboardLayout>
+      <div className="flex flex-col items-center justify-center h-[70vh]">
+        <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4" />
+        <p className="text-slate-500 font-medium text-sm">Loading file history...</p>
+      </div>
+    </DashboardLayout>
   );
 
   if (error || !fileHistory) return (
-    <div className="min-h-screen bg-[#01060b] text-white flex flex-col items-center justify-center p-10">
-      <div className="text-6xl mb-6">⚠️</div>
-      <h1 className="text-4xl font-black italic uppercase mb-4">Archive Not Found</h1>
-      <Link href="/dashboard" className="px-8 py-3 bg-white/5 border border-white/10 rounded-full font-bold text-xs uppercase tracking-widest hover:bg-cyan-400 hover:text-black transition-all">
-        Back to Universe
-      </Link>
-    </div>
+    <DashboardLayout>
+      <div className="flex flex-col items-center justify-center h-[70vh] text-center px-4">
+        <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mb-6">
+          <AlertCircle size={32} className="text-red-500" />
+        </div>
+        <h1 className="text-2xl font-bold text-slate-800 mb-2">File Not Found</h1>
+        <p className="text-slate-500 mb-8 max-w-sm">We couldn't find the requested file. It may not exist or you might not have access to it.</p>
+        <Link href="/dashboard" className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium text-sm hover:bg-blue-700 transition-colors">
+          Back to Drive
+        </Link>
+      </div>
+    </DashboardLayout>
   );
 
   return (
-    <div className="min-h-screen bg-[#01060b] text-white font-sans selection:bg-cyan-400 overflow-x-hidden relative flex flex-col">
-     
-      {/* CINEMATIC BACKGROUND */}
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-[-10%] right-[-10%] w-[60%] h-[60%] bg-cyan-500/5 blur-[120px] rounded-full" />
-        <div className="absolute bottom-[-10%] left-[-10%] w-[50%] h-[50%] bg-blue-600/5 blur-[120px] rounded-full" />
-      </div>
-
-      <nav className="relative z-50 flex items-center justify-between px-10 py-8 max-w-[1600px] mx-auto w-full">
-        <Link href="/dashboard" className="flex items-center gap-2 text-gray-500 hover:text-cyan-400 transition-colors group">
-          <ChevronLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
-          <span className="text-[10px] font-bold uppercase tracking-[3px]">Back to Dashboard</span>
-        </Link>
-        <div className="flex items-center gap-3">
-          <Layers className="text-cyan-400" size={24} />
-          <span className="text-2xl font-black tracking-tighter italic uppercase">Version Timeline</span>
+    <DashboardLayout>
+      <div className="p-6 lg:p-8 max-w-5xl mx-auto">
+        <div className="mb-6 flex items-center justify-between">
+          <button 
+            onClick={() => router.back()} 
+            className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors font-medium text-sm"
+          >
+            <ArrowLeft size={16} />
+            Back
+          </button>
         </div>
-        <AuthButton />
-      </nav>
 
-      <main className="relative z-10 max-w-[1600px] mx-auto w-full px-10 grid lg:grid-cols-12 gap-12 pb-20">
-       
-        {/* LEFT: HOLOGRAPHIC FILE INFO */}
-        <div className="lg:col-span-4">
-          <div className="bg-[#050b14]/90 backdrop-blur-3xl border border-white/5 rounded-[40px] p-8 sticky top-10 shadow-2xl overflow-hidden group">
-            <div className="absolute inset-0 bg-gradient-to-b from-cyan-400/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-           
-            <h1 className="text-3xl font-black italic uppercase mb-8 break-words text-white/90 leading-tight">
-              {fileHistory.file.name || 'Unnamed Archive'}
-            </h1>
-
-            <div className="space-y-6 relative z-10">
-              <InfoBlock label="Protocol ID" value={fileHistory.file.fileId} mono />
-              <InfoBlock label="Mime Type" value={fileHistory.file.mimeType || 'Unknown'} />
-              <div className="grid grid-cols-2 gap-4">
-                <InfoBlock label="Created" value={formatDate(fileHistory.file.createdAt)} />
-                <InfoBlock label="Total Versions" value={fileHistory.versions.length} />
+        <div className="grid lg:grid-cols-12 gap-8">
+          {/* LEFT: FILE INFO */}
+          <div className="lg:col-span-4 space-y-6">
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+              <div className="w-16 h-16 bg-blue-50 rounded-xl flex items-center justify-center mb-4">
+                <FileText size={32} className="text-blue-600" />
               </div>
-              <InfoBlock label="Sui Owner" value={fileHistory.file.owner} mono small />
-            </div>
+              <h1 className="text-xl font-bold text-slate-800 mb-6 break-words leading-tight">
+                {fileHistory.file.name || 'Unnamed File'}
+              </h1>
 
-            <div className="mt-10 space-y-3 relative z-10">
-              {latestVersion && (
-                <a
-                  href={`/api/download?blobId=${latestVersion.blobId}&fileName=${encodeURIComponent(fileHistory.file.name || latestVersion.blobId)}`}
-                  download
-                  className="block w-full py-4 bg-cyan-400 text-black rounded-2xl font-black uppercase tracking-widest text-[10px] text-center hover:scale-[1.02] transition shadow-[0_0_30px_rgba(34,211,238,0.3)]"
-                >
-                  Download Latest
-                </a>
-              )}
-              <Link
-                href={`/upload?fileId=${fileHistory.file.fileId}&objectId=${fileHistory.file.objectId || ''}`}
-                className="block w-full py-4 bg-white/5 border border-white/10 rounded-2xl font-black uppercase tracking-widest text-[10px] text-center hover:bg-white/10 transition"
-              >
-                Upload New Version
-              </Link>
-              <button
-                onClick={() => setShareOpen(true)}
-                className="w-full py-4 bg-green-600/10 border border-green-500/20 rounded-2xl font-black uppercase tracking-widest text-[10px] text-center hover:bg-green-600/20 text-green-400 transition flex items-center justify-center gap-2"
-              >
-                <Share2 size={14} /> Share
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* RIGHT: THE TIMELINE RIBBON */}
-        <div className="lg:col-span-8">
-          <div className="mb-10 flex items-center justify-between">
-            <div>
-              <h2 className="text-2xl font-[1000] italic uppercase italic">History Log</h2>
-              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[3px] mt-1">Select a version to inspect data</p>
-            </div>
-          </div>
-
-          <div className="relative border-l-2 border-white/5 ml-4 space-y-10">
-            {fileHistory.versions.map((v: any, index: number) => (
-              <div key={v.versionId} className="relative pl-12 group">
-                {/* Timeline Dot */}
-                <div className={`absolute left-[-9px] top-4 w-4 h-4 rounded-full border-2 border-[#01060b] transition-all duration-500 ${selectedVersion?.version === v.version ? 'bg-cyan-400 shadow-[0_0_20px_#00F0FF] scale-125' : 'bg-gray-800 group-hover:bg-cyan-900'}`} />
-               
-                <div
-                  onClick={() => setSelectedVersion(v)}
-                  className={`cursor-pointer bg-white/[0.02] border rounded-[32px] p-8 transition-all duration-500 ${selectedVersion?.version === v.version ? 'border-cyan-400/50 bg-cyan-400/[0.03]' : 'border-white/5 hover:border-white/20'}`}
-                >
-                  <div className="flex justify-between items-center mb-6">
-                    <div className="flex items-center gap-4">
-                      <span className="text-4xl font-black italic text-white/10 group-hover:text-cyan-400/20 transition-colors">#{v.version}</span>
-                      <div className="flex items-center gap-2 px-3 py-1 bg-cyan-400/10 rounded-full">
-                        <Clock size={12} className="text-cyan-400" />
-                        <span className="text-[9px] font-black text-cyan-400 uppercase tracking-widest">{formatDate(v.timestamp)}</span>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                       <span className="text-[8px] font-mono text-gray-600 uppercase">BLOB: {v.blobId.slice(0, 8)}...</span>
-                    </div>
-                  </div>
-
-                  {/* Expandable Details Area */}
-                  {selectedVersion?.version === v.version && (
-                    <div className="mt-8 pt-8 border-t border-white/5 space-y-8 animate-in fade-in slide-in-from-top-4">
-                      {v.summary && (
-                        <div className="bg-[#01060b] p-6 rounded-2xl border border-cyan-400/20 relative">
-                          <Sparkles className="absolute top-4 right-4 text-cyan-400 opacity-20" size={16} />
-                          <p className="text-[9px] font-black text-cyan-400 uppercase tracking-widest mb-3">AI Intelligence Report</p>
-                          <p className="text-sm text-gray-300 leading-relaxed italic">{v.summary}</p>
-                        </div>
-                      )}
-
-                      <div className="space-y-3">
-                         <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Protocol Preview</p>
-                         <div className="rounded-2xl overflow-hidden bg-black/40 border border-white/5">
-                            <FilePreview blobId={v.blobId} mimeType={fileHistory.file.mimeType} fileName={fileHistory.file.name} summary={v.summary} />
-                         </div>
-                      </div>
-
-                      <div className="flex gap-4">
-                        <a href={`https://suiexplorer.com/object/${v.versionId}?network=testnet`} target="_blank" className="flex-1 py-3 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase text-center hover:bg-white/10 transition flex items-center justify-center gap-2">
-                          Explore Transaction <ExternalLink size={12} />
-                        </a>
-                        <Link href={`/verify/${encodeURIComponent(v.blobId)}`} className="flex-1 py-3 bg-green-500/10 border border-green-500/20 rounded-xl text-[10px] font-black uppercase text-center text-green-500 hover:bg-green-500/20 transition flex items-center justify-center gap-2">
-                          Verify Blob <ShieldCheck size={12} />
-                        </Link>
-                      </div>
-                    </div>
-                  )}
+              <div className="space-y-4">
+                <InfoBlock label="Owner" value={fileHistory.file.owner} mono />
+                <InfoBlock label="File ID" value={fileHistory.file.fileId} mono />
+                <InfoBlock label="Type" value={fileHistory.file.mimeType || 'Unknown'} />
+                <div className="grid grid-cols-2 gap-4">
+                  <InfoBlock label="Created" value={formatDate(fileHistory.file.createdAt)} />
+                  <InfoBlock label="Versions" value={fileHistory.versions.length} />
                 </div>
               </div>
-            ))}
+
+              <div className="mt-8 pt-6 border-t border-slate-100 flex flex-col gap-3">
+                {latestVersion && (
+                  <a
+                    href={`/api/download?blobId=${latestVersion.blobId}&fileName=${encodeURIComponent(fileHistory.file.name || latestVersion.blobId)}`}
+                    download
+                    className="w-full py-2.5 bg-blue-600 text-white rounded-lg font-medium text-sm text-center hover:bg-blue-700 transition-colors shadow-sm flex items-center justify-center gap-2"
+                  >
+                    <Download size={16} /> Download
+                  </a>
+                )}
+                <div className="grid grid-cols-2 gap-3">
+                  <Link
+                    href={`/upload?fileId=${fileHistory.file.fileId}&objectId=${fileHistory.file.objectId || ''}`}
+                    className="w-full py-2.5 bg-white border border-slate-300 text-slate-700 rounded-lg font-medium text-sm text-center hover:bg-slate-50 transition-colors"
+                  >
+                    Update
+                  </Link>
+                  <button
+                    onClick={() => setShareOpen(true)}
+                    className="w-full py-2.5 bg-white border border-slate-300 text-slate-700 rounded-lg font-medium text-sm text-center hover:bg-slate-50 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Share2 size={16} /> Share
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* RIGHT: TIMELINE */}
+          <div className="lg:col-span-8">
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold text-slate-800">Version History</h2>
+              <p className="text-sm text-slate-500 mt-1">Select a version to preview and inspect details.</p>
+            </div>
+
+            <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+              <div className="divide-y divide-slate-100">
+                {fileHistory.versions.map((v: any, index: number) => {
+                  const isSelected = selectedVersion?.version === v.version;
+                  
+                  return (
+                    <div key={v.versionId} className="group">
+                      <div 
+                        onClick={() => setSelectedVersion(v)}
+                        className={`p-5 cursor-pointer transition-colors flex items-start gap-4 ${isSelected ? 'bg-blue-50/50' : 'hover:bg-slate-50'}`}
+                      >
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${isSelected ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-100 text-slate-500'}`}>
+                          {v.version}
+                        </div>
+                        
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className={`font-semibold text-sm ${isSelected ? 'text-blue-700' : 'text-slate-800'}`}>Version {v.version}</span>
+                            <span className="text-xs text-slate-500 flex items-center gap-1.5"><Clock size={12}/> {formatDate(v.timestamp)}</span>
+                          </div>
+                          <div className="text-xs font-mono text-slate-500 truncate mb-1">BLOB: {v.blobId}</div>
+                        </div>
+                      </div>
+
+                      {/* Expandable Details Area */}
+                      {isSelected && (
+                        <div className="px-5 pb-5 pt-2 animate-in fade-in slide-in-from-top-2 ml-12 border-t border-transparent">
+                          
+                          <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 mb-4">
+                            <FilePreview blobId={v.blobId} mimeType={fileHistory.file.mimeType} fileName={fileHistory.file.name} summary={v.summary} />
+                          </div>
+
+                          {v.summary && !v.summary.includes('[enc:salt=') && (
+                            <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mb-4 relative">
+                              <Sparkles className="absolute top-4 right-4 text-blue-400 opacity-20" size={24} />
+                              <h4 className="text-xs font-bold text-blue-700 uppercase tracking-wider mb-2">AI Summary</h4>
+                              <p className="text-sm text-slate-700 leading-relaxed">{v.summary}</p>
+                            </div>
+                          )}
+
+                          <div className="flex gap-3">
+                            <a href={`https://suiexplorer.com/object/${v.versionId}?network=testnet`} target="_blank" rel="noreferrer" className="flex-1 py-2 bg-white border border-slate-300 rounded-lg text-xs font-medium text-slate-700 text-center hover:bg-slate-50 transition-colors flex items-center justify-center gap-1.5 shadow-sm">
+                              <ExternalLink size={14} /> Explorer
+                            </a>
+                            <Link href={`/verify/${encodeURIComponent(v.blobId)}`} className="flex-1 py-2 bg-white border border-slate-300 rounded-lg text-xs font-medium text-slate-700 text-center hover:bg-slate-50 transition-colors flex items-center justify-center gap-1.5 shadow-sm">
+                              <ShieldCheck size={14} className="text-green-600" /> Verify
+                            </Link>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
-      </main>
+      </div>
 
       {/* Share Dialog */}
       {fileHistory && latestVersion && (
@@ -193,15 +195,15 @@ export default function FileDetailPage({ params }: { params: Promise<{ fileId: s
           ownerAddress={fileHistory.file.owner}
         />
       )}
-    </div>
+    </DashboardLayout>
   );
 }
 
-function InfoBlock({ label, value, mono, small }: any) {
+function InfoBlock({ label, value, mono }: any) {
   return (
     <div>
-      <p className="text-[9px] font-bold text-gray-600 uppercase tracking-[3px] mb-1.5">{label}</p>
-      <p className={`${mono ? 'font-mono' : 'font-black italic'} ${small ? 'text-[10px]' : 'text-sm'} text-white/80 break-all leading-tight uppercase`}>
+      <p className="text-xs font-medium text-slate-500 mb-1">{label}</p>
+      <p className={`text-sm text-slate-800 ${mono ? 'font-mono text-xs break-all' : 'font-medium break-words'}`}>
         {value}
       </p>
     </div>
@@ -222,17 +224,16 @@ function FilePreview({ blobId, mimeType, fileName, summary }: { blobId: string; 
   const isEncrypted = !!encMatch;
   const encSalt = encMatch?.[1] || '';
 
-  // If encrypted and not yet decrypted, show decrypt button
   if (isEncrypted && !decryptedUrl) {
     return (
-      <div className="p-8 text-center space-y-4 bg-white/[0.02] rounded-2xl border border-green-500/20">
-        <div className="text-3xl">🔒</div>
-        <p className="text-xs font-bold text-green-400 uppercase tracking-widest">Encrypted File</p>
-        <p className="text-[10px] text-gray-500 max-w-xs mx-auto">
-          This file was encrypted client-side before upload. Only the owner wallet can decrypt it.
+      <div className="text-center py-6">
+        <Lock size={32} className="text-slate-400 mx-auto mb-3" />
+        <p className="text-sm font-semibold text-slate-800 mb-2">Encrypted File</p>
+        <p className="text-xs text-slate-500 max-w-xs mx-auto mb-4">
+          This file was encrypted before upload. Only the owner can decrypt it.
         </p>
         {decryptError && (
-          <p className="text-[10px] text-red-400">{decryptError}</p>
+          <p className="text-xs text-red-500 mb-4">{decryptError}</p>
         )}
         <button
           onClick={async () => {
@@ -240,7 +241,6 @@ function FilePreview({ blobId, mimeType, fileName, summary }: { blobId: string; 
             setDecryptError(null);
             try {
               const { decryptWalrusBlob } = await import('@/lib/crypto/encryption');
-              // Get wallet address from zkLogin session
               const accountData = localStorage.getItem('suidrive_zklogin_account');
               let walletAddress = '';
               if (accountData) {
@@ -263,9 +263,9 @@ function FilePreview({ blobId, mimeType, fileName, summary }: { blobId: string; 
             }
           }}
           disabled={decrypting}
-          className="px-6 py-3 bg-green-600 hover:bg-green-500 disabled:bg-gray-700 rounded-xl text-xs font-bold uppercase tracking-widest transition-all"
+          className="px-4 py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:bg-slate-100 rounded-lg text-sm font-medium transition-colors shadow-sm inline-flex items-center gap-2"
         >
-          {decrypting ? 'Decrypting...' : '🔓 Decrypt & Preview'}
+          {decrypting ? 'Decrypting...' : 'Unlock Preview'}
         </button>
       </div>
     );
@@ -275,36 +275,37 @@ function FilePreview({ blobId, mimeType, fileName, summary }: { blobId: string; 
 
   if (mimeType?.startsWith('image/')) {
     return (
-      <div className="p-4 flex justify-center bg-white/[0.02]">
-        <img src={displayUrl} alt={fileName} className="max-w-full max-h-96 rounded-xl shadow-2xl" />
+      <div className="flex justify-center">
+        <img src={displayUrl} alt={fileName} className="max-w-full max-h-64 rounded-lg object-contain" />
       </div>
     );
   }
   if (mimeType?.startsWith('video/')) {
     return (
-      <div className="p-4">
-        <video controls className="w-full rounded-xl">
+      <div>
+        <video controls className="w-full max-h-64 rounded-lg">
           <source src={displayUrl} type={mimeType} />
         </video>
       </div>
     );
   }
   if (mimeType === 'application/pdf') {
-    return <iframe src={displayUrl} className="w-full h-96 bg-white rounded-xl" />;
+    return <iframe src={displayUrl} className="w-full h-80 rounded-lg bg-white border border-slate-200" />;
   }
   if (mimeType?.startsWith('text/') || mimeType === 'application/json') {
     if (textContent === null) {
       fetch(displayUrl).then(r => r.text()).then(t => setTextContent(t.slice(0, 4000)));
     }
     return (
-      <div className="p-6 max-h-64 overflow-auto bg-[#01060b] font-mono text-[11px] text-cyan-400/80 leading-relaxed">
-        <pre className="whitespace-pre-wrap">{textContent ?? 'Decoding...'}</pre>
+      <div className="max-h-64 overflow-auto bg-white border border-slate-200 rounded-lg p-4 text-xs font-mono text-slate-700">
+        <pre className="whitespace-pre-wrap">{textContent ?? 'Loading...'}</pre>
       </div>
     );
   }
   return (
-    <div className="p-10 text-center text-gray-600 text-[10px] font-bold uppercase tracking-widest">
-      Preview Protocol Unavailable
+    <div className="text-center py-6 text-slate-500 text-sm">
+      <FileText size={32} className="text-slate-300 mx-auto mb-2" />
+      No preview available for this file type
     </div>
   );
 }

@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState, useEffect, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useZkLogin } from '@/contexts/ZkLoginProvider';
-import { AuthButton, AuthOptions } from '@/components/AuthButton';
+import { AuthOptions } from '@/components/AuthButton';
 import { suiClientEnhanced } from '@/lib/sui/client';
 import { walrusClient } from '@/lib/walrus/client';
 import { encryptFile } from '@/lib/crypto/encryption';
@@ -12,7 +12,7 @@ import type { UploadProgress } from '@/types';
 import {
   Cloud, ShieldCheck, Zap,
   Cpu, HardDrive, FileCheck, ExternalLink,
-  ChevronLeft, Loader2, Sparkles, Database, Lock, LockOpen
+  ChevronLeft, Loader2, Sparkles, Database, Lock, LockOpen, ArrowLeft
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -20,6 +20,7 @@ function UploadPageContent() {
   // --- BOSS'S LOGIC START ---
   const { account, address, signAndExecuteTransaction } = useZkLogin();
   const searchParams = useSearchParams();
+  const router = useRouter();
  
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -51,7 +52,7 @@ function UploadPageContent() {
   const handleUpload = async () => {
     if (!file || !address) return;
     setUploading(true);
-    setProgress({ stage: 'uploading', progress: 10, message: 'Preparing protocol...' });
+    setProgress({ stage: 'uploading', progress: 10, message: 'Preparing upload...' });
 
     try {
       const fileId = existingFileId || generateFileId();
@@ -69,13 +70,12 @@ function UploadPageContent() {
         encryptionSalt = salt;
       }
 
-      setProgress({ stage: 'uploading', progress: 30, message: 'Archiving to Walrus...' });
+      setProgress({ stage: 'uploading', progress: 30, message: 'Uploading to Walrus...' });
       const { blobId } = await walrusClient.uploadFile(uploadPayload as File);
 
-      setProgress({ stage: 'analyzing', progress: 50, message: 'Consulting NVIDIA NIM AI...' });
+      setProgress({ stage: 'analyzing', progress: 50, message: 'Analyzing with AI...' });
       let aiSummary = '';
       try {
-        // Only analyze unencrypted text files — encrypted content is opaque
         if (!encryptionEnabled) {
           const fileContent = await readFileAsText(file);
           if (fileContent) {
@@ -95,15 +95,14 @@ function UploadPageContent() {
       } catch (e) { console.warn('AI failed', e); }
 
       if (!isNewVersion) {
-        setProgress({ stage: 'blockchain', progress: 70, message: 'Minting Sui File Object...' });
+        setProgress({ stage: 'blockchain', progress: 70, message: 'Creating File Record on Sui...' });
         const fileTx = suiClientEnhanced.createFileTransaction(fileId, file.name, file.type);
         await new Promise<void>((res, rej) => {
           signAndExecuteTransaction({ transaction: fileTx, onSuccess: () => res(), onError: (e) => rej(e) });
         });
       }
 
-      setProgress({ stage: 'blockchain', progress: 85, message: 'Finalizing Immutable Version...' });
-      // Include encryption metadata in the AI summary field (stored on-chain)
+      setProgress({ stage: 'blockchain', progress: 85, message: 'Finalizing Version on Sui...' });
       const summaryWithMeta = encryptionSalt
         ? `${aiSummary} [enc:salt=${encryptionSalt}]`
         : aiSummary;
@@ -117,7 +116,7 @@ function UploadPageContent() {
         });
       });
 
-      setProgress({ stage: 'complete', progress: 100, message: 'Protocol complete!' });
+      setProgress({ stage: 'complete', progress: 100, message: 'Upload complete!' });
       setResult({
         success: true, fileId, objectId: existingObjectId, versionId, blobId,
         transactionDigest: txDigest, aiSummary, isNewVersion, versionNumber,
@@ -142,218 +141,143 @@ function UploadPageContent() {
   // --- BOSS'S LOGIC END ---
 
   return (
-    <div className="min-h-screen bg-[#01060b] text-white font-sans selection:bg-cyan-400 selection:text-black overflow-hidden relative flex flex-col">
-     
-      {/* 1. LAYER: CINEMATIC AMBIANCE */}
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-cyan-500/5 blur-[120px] rounded-full" />
-        <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] bg-blue-600/5 blur-[120px] rounded-full" />
-        <div className="absolute inset-0 opacity-[0.03] bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
+    <div className="min-h-screen bg-[#f8fafc] text-slate-900 font-sans flex flex-col items-center pt-8 px-4 pb-20">
+      
+      <div className="w-full max-w-2xl mb-6">
+        <button 
+          onClick={() => router.back()} 
+          className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors font-medium text-sm w-fit"
+        >
+          <ArrowLeft size={16} />
+          Back
+        </button>
       </div>
 
-      {/* HEADER */}
-      <nav className="relative z-50 flex items-center justify-between px-10 py-8 max-w-[1600px] mx-auto w-full">
-        <Link href="/dashboard" className="flex items-center gap-2 text-gray-500 hover:text-cyan-400 transition-colors group">
-          <ChevronLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
-          <span className="text-[10px] font-bold uppercase tracking-[3px]">Back to Universe</span>
-        </Link>
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-gradient-to-br from-cyan-400 to-blue-600 rounded-lg flex items-center justify-center shadow-[0_0_20px_rgba(34,211,238,0.3)]">
-            <span className="text-black font-black text-xl italic">S</span>
-          </div>
-          <span className="text-2xl font-black tracking-tighter italic">SuiDrive</span>
-        </div>
-        <AuthButton />
-      </nav>
-
-      {/* MAIN CHAMBER */}
-      <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 pb-20">
-       
-        <div className="text-center mb-12 space-y-4">
-          <h1 className="text-[60px] md:text-[80px] font-[1000] leading-none tracking-tighter uppercase italic">
-            {existingFileId ? "NEW VERSION" : "PERMANENT"}<br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-white via-cyan-400 to-blue-600 drop-shadow-[0_0_20px_rgba(34,211,238,0.3)]">
-              ARCHIVE.
-            </span>
+      <div className="w-full max-w-2xl bg-white border border-slate-200 rounded-2xl shadow-sm p-8 md:p-12">
+        <div className="mb-8 text-center">
+          <h1 className="text-2xl font-bold text-slate-800 mb-2">
+            {existingFileId ? "Upload New Version" : "Upload to Drive"}
           </h1>
-          <p className="text-gray-500 font-bold uppercase tracking-[4px] text-[10px]">
-            {existingFileId ? `APPENDING VERSION ${versionNumber} ● SUI MAINNET` : "INITIATING IMMUTABLE FILE HISTORY PROTOCOL"}
+          <p className="text-slate-500 text-sm">
+            {existingFileId ? `Appending Version ${versionNumber}` : "Files are stored permanently on Walrus"}
           </p>
         </div>
 
-        <div className="w-full max-w-4xl grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
-         
-          {/* UPLOAD CHAMBER */}
-          <div className="lg:col-span-7 group relative">
-             <div className="absolute -inset-1 bg-gradient-to-r from-cyan-400/20 to-blue-600/20 rounded-[40px] blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
-             <div className="relative h-full bg-[#050b14]/90 backdrop-blur-3xl border border-white/5 rounded-[40px] p-10 flex flex-col items-center justify-center transition-all duration-500 group-hover:border-cyan-400/30">
-               
-                {!address ? (
-                  <div className="text-center space-y-6">
-                    <div className="w-20 h-20 mx-auto bg-cyan-400/10 rounded-3xl flex items-center justify-center border border-cyan-400/20">
-                      <Zap size={40} className="text-cyan-400" />
-                    </div>
-                    <h3 className="text-xl font-black uppercase italic">Protocol Locked</h3>
-                    <p className="text-gray-500 text-xs max-w-[200px] mx-auto font-medium">Sign in to unlock decentralized storage.</p>
-                    <AuthOptions />
-                  </div>
-                ) : (
-                  <div className="w-full space-y-10">
-                    {/* DROPZONE */}
-                    <div className="relative group/zone">
-                      <input type="file" onChange={handleFileChange} className="hidden" id="file-input" disabled={uploading} />
-                      <label htmlFor="file-input" className="block cursor-pointer">
-                        <div className="relative border-2 border-dashed border-white/10 rounded-3xl p-12 flex flex-col items-center transition-all duration-500 group-hover/zone:border-cyan-400/40 bg-white/[0.01] group-hover/zone:bg-cyan-400/[0.02]">
-                          {file ? (
-                            <div className="text-center">
-                              <div className="w-16 h-16 bg-cyan-400/20 rounded-2xl flex items-center justify-center mx-auto mb-4 animate-pulse">
-                                <FileCheck className="text-cyan-400" size={32} />
-                              </div>
-                              <p className="text-white font-black uppercase italic tracking-tighter truncate max-w-[200px]">{file.name}</p>
-                              <p className="text-[10px] text-gray-500 font-bold uppercase mt-2">{(file.size / 1024).toFixed(2)} KB</p>
-                            </div>
-                          ) : (
-                            <div className="text-center space-y-4">
-                              <Cloud size={48} className="text-gray-700 group-hover/zone:text-cyan-400 transition-colors mx-auto" />
-                              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[4px]">Drop manifest here</p>
-                            </div>
-                          )}
-                        </div>
-                      </label>
-                    </div>
-
-                    {/* ENCRYPTION TOGGLE */}
-                    <button
-                      type="button"
-                      onClick={() => setEncryptionEnabled(!encryptionEnabled)}
-                      className={`w-full py-4 rounded-2xl flex items-center justify-center gap-3 text-xs font-bold uppercase tracking-[3px] transition-all border ${
-                        encryptionEnabled
-                          ? 'bg-green-500/10 border-green-500/30 text-green-400 shadow-[0_0_20px_rgba(34,197,94,0.15)]'
-                          : 'bg-white/[0.02] border-white/10 text-gray-500 hover:border-white/20 hover:text-gray-300'
-                      }`}
-                    >
-                      {encryptionEnabled ? <Lock size={16} /> : <LockOpen size={16} />}
-                      {encryptionEnabled ? 'Encryption: ON (AES-256-GCM)' : 'Encrypt before upload'}
-                    </button>
-                    {encryptionEnabled && (
-                      <p className="text-[9px] text-green-500/70 text-center -mt-3 font-medium">
-                        File will be encrypted locally using your wallet address. Only you can decrypt it.
-                      </p>
-                    )}
-
-                    <button
-                      onClick={handleUpload}
-                      disabled={!file || uploading}
-                      className={`w-full py-5 rounded-2xl font-black uppercase tracking-[4px] text-xs transition-all flex items-center justify-center gap-3 ${
-                        !file || uploading
-                        ? 'bg-white/5 text-gray-600 border border-white/5'
-                        : 'bg-gradient-to-r from-blue-600 to-cyan-400 text-black shadow-[0_0_40px_rgba(34,211,238,0.3)] hover:scale-[1.02] active:scale-95'
-                      }`}
-                    >
-                      {uploading ? <><Loader2 className="animate-spin" size={18} /> Protocol in Progress</> : <><Zap size={18} fill="currentColor" /> Initialize Archive</>}
-                    </button>
-                  </div>
-                )}
+        {!address ? (
+          <div className="flex flex-col items-center justify-center text-center py-8">
+             <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-6">
+               <ShieldCheck size={32} className="text-blue-600" />
              </div>
+             <h3 className="text-xl font-semibold text-slate-800 mb-2">Sign in Required</h3>
+             <p className="text-slate-500 text-sm mb-8">Please sign in to upload files.</p>
+             <AuthOptions />
           </div>
+        ) : (
+          <div className="space-y-6">
+            
+            {/* DROPZONE */}
+            <div className="relative">
+              <input type="file" onChange={handleFileChange} className="hidden" id="file-input" disabled={uploading} />
+              <label htmlFor="file-input" className="block cursor-pointer">
+                <div className={`border-2 border-dashed rounded-xl p-10 flex flex-col items-center justify-center transition-colors ${file ? 'border-blue-400 bg-blue-50' : 'border-slate-300 hover:border-blue-400 hover:bg-slate-50 bg-white'}`}>
+                  {file ? (
+                    <div className="text-center">
+                      <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <FileCheck className="text-blue-600" size={24} />
+                      </div>
+                      <p className="text-slate-800 font-medium truncate max-w-xs mx-auto">{file.name}</p>
+                      <p className="text-sm text-slate-500 mt-1">{(file.size / 1024).toFixed(2)} KB</p>
+                    </div>
+                  ) : (
+                    <div className="text-center">
+                      <Cloud size={40} className="text-slate-400 mx-auto mb-3" />
+                      <p className="text-slate-700 font-medium mb-1">Click or drag file to this area to upload</p>
+                      <p className="text-sm text-slate-500">Supports single file upload</p>
+                    </div>
+                  )}
+                </div>
+              </label>
+            </div>
 
-          {/* STATUS & AI CONSOLE */}
-          <div className="lg:col-span-5 flex flex-col gap-6">
-             {/* PROGRESS / RESULT CARD */}
-             <div className="flex-1 bg-[#050b14]/80 backdrop-blur-3xl border border-white/5 rounded-[40px] p-8 flex flex-col">
-                <div className="flex items-center gap-3 mb-6">
-                   <div className="p-2 bg-blue-600/10 rounded-lg">
-                      <Cpu size={16} className="text-blue-400" />
-                   </div>
-                   <h4 className="text-[10px] font-bold uppercase tracking-[4px] text-gray-500">Live Console</h4>
+            {/* ENCRYPTION TOGGLE */}
+            <label className="flex items-center gap-3 p-4 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors select-none">
+              <input 
+                type="checkbox" 
+                checked={encryptionEnabled}
+                onChange={(e) => setEncryptionEnabled(e.target.checked)}
+                disabled={uploading}
+                className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+              />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-slate-800 flex items-center gap-2">
+                  <Lock size={14} className={encryptionEnabled ? "text-blue-600" : "text-slate-400"} />
+                  Encrypt file before upload
+                </p>
+                <p className="text-xs text-slate-500 mt-1">Your file will be encrypted using your wallet address. Only you can decrypt it.</p>
+              </div>
+            </label>
+
+            {/* UPLOAD BUTTON */}
+            <button
+              onClick={handleUpload}
+              disabled={!file || uploading || !!result}
+              className={`w-full py-3.5 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2 ${
+                !file || uploading || !!result
+                ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                : 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm'
+              }`}
+            >
+              {uploading ? <><Loader2 className="animate-spin" size={18} /> Uploading...</> : <><Cloud size={18} /> Upload File</>}
+            </button>
+
+            {/* PROGRESS BAR */}
+            {progress && !result && (
+              <div className="mt-6 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm font-medium text-slate-700">{progress.stage === 'uploading' ? 'Uploading' : 'Processing'}</span>
+                  <span className="text-sm font-medium text-blue-600">{progress.progress}%</span>
+                </div>
+                <div className="h-2 w-full bg-slate-200 rounded-full overflow-hidden mb-3">
+                  <div className="h-full bg-blue-600 transition-all duration-300" style={{ width: `${progress.progress}%` }} />
+                </div>
+                <p className="text-xs text-slate-500">{progress.message}</p>
+              </div>
+            )}
+
+            {/* SUCCESS STATE */}
+            {result && (
+              <div className="mt-6 p-5 bg-green-50 border border-green-200 rounded-xl animate-in fade-in slide-in-from-bottom-4">
+                <div className="flex items-center gap-2 text-green-700 font-semibold mb-3">
+                  <ShieldCheck size={20} />
+                  Upload Successful
+                </div>
+                
+                <div className="space-y-2 mb-4 text-xs text-slate-600 font-mono bg-white p-3 rounded border border-green-100">
+                   <p className="flex justify-between"><span className="text-slate-400">Blob ID:</span> <span className="truncate ml-4">{result.blobId}</span></p>
+                   <p className="flex justify-between"><span className="text-slate-400">Sui TX:</span> <span className="truncate ml-4">{result.transactionDigest}</span></p>
                 </div>
 
-                {!progress && !result && (
-                  <div className="flex-1 flex flex-col items-center justify-center text-center opacity-30">
-                    <Database size={40} className="mb-4" />
-                    <p className="text-[8px] font-bold uppercase tracking-widest leading-loose">Waiting for<br />Input Signal...</p>
-                  </div>
-                )}
+                <div className="flex gap-3">
+                  <Link href={`/files/${result.objectId || result.fileId}`} className="flex-1 text-center py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors">
+                    View File
+                  </Link>
+                  <Link href="/dashboard" className="flex-1 text-center py-2 bg-white border border-green-200 text-green-700 hover:bg-green-50 rounded-lg text-sm font-medium transition-colors">
+                    Back to Drive
+                  </Link>
+                </div>
+              </div>
+            )}
 
-                {progress && !result && (
-                  <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-end">
-                        <span className="text-[10px] font-black uppercase italic text-cyan-400">{progress.stage}</span>
-                        <span className="text-2xl font-black font-mono italic">{progress.progress}%</span>
-                      </div>
-                      <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                        <div className="h-full bg-gradient-to-r from-blue-600 to-cyan-400 transition-all duration-500" style={{ width: `${progress.progress}%` }} />
-                      </div>
-                    </div>
-                    <p className="text-xs text-gray-400 font-medium italic border-l-2 border-cyan-400 pl-4">{progress.message}</p>
-                  </div>
-                )}
-
-                {result && (
-                  <div className="space-y-6 animate-in zoom-in-95 duration-500">
-                    <div className="p-4 bg-green-500/5 border border-green-500/20 rounded-2xl">
-                      <div className="flex items-center gap-3 text-green-500 mb-4">
-                        <ShieldCheck size={18} />
-                        <span className="text-[10px] font-black uppercase tracking-widest">Protocol Verified</span>
-                      </div>
-                      <div className="space-y-3 font-mono text-[9px] text-gray-400">
-                        <p className="flex justify-between"><span>BLOB ID:</span> <span className="text-cyan-400">0x...{result.blobId.slice(-6)}</span></p>
-                        <p className="flex justify-between"><span>SUI TX:</span> <span className="text-cyan-400">0x...{result.transactionDigest.slice(-6)}</span></p>
-                      </div>
-                    </div>
-
-                    {result.aiSummary && (
-                      <div className="p-6 bg-cyan-400/5 border border-cyan-400/10 rounded-2xl relative group overflow-hidden">
-                        <Sparkles className="absolute top-4 right-4 text-cyan-400 opacity-20" size={16} />
-                        <h5 className="text-[9px] font-bold text-cyan-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                           NVIDIA NIM Analysis
-                        </h5>
-                        <p className="text-[11px] text-gray-300 leading-relaxed italic">{result.aiSummary}</p>
-                      </div>
-                    )}
-
-                    <a
-                      href={`https://suiexplorer.com/txblock/${result.transactionDigest}?network=testnet`}
-                      target="_blank" rel="noreferrer"
-                      className="flex items-center justify-center gap-2 text-[9px] font-bold text-gray-500 uppercase tracking-widest hover:text-white transition-colors"
-                    >
-                      View Onchain Proof <ExternalLink size={10} />
-                    </a>
-                  </div>
-                )}
-             </div>
-
-             {/* SIDE TECH TILES */}
-             <div className="grid grid-cols-3 gap-4">
-               <TechTile icon={<HardDrive size={16} />} label="Walrus" />
-               <TechTile icon={<Zap size={16} />} label="Sui" />
-               <TechTile icon={<Sparkles size={16} />} label="NIM" />
-             </div>
           </div>
-        </div>
-      </main>
-
-      <style jsx global>{`
-        @keyframes bounce-slow { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
-        .animate-bounce-slow { animation: bounce-slow 4s ease-in-out infinite; }
-      `}</style>
-    </div>
-  );
-}
-
-function TechTile({ icon, label }: any) {
-  return (
-    <div className="p-4 bg-white/[0.02] border border-white/5 rounded-2xl flex flex-col items-center gap-2 hover:bg-white/[0.05] transition-all cursor-crosshair group">
-       <div className="text-gray-600 group-hover:text-cyan-400 transition-colors">{icon}</div>
-       <span className="text-[8px] font-bold text-gray-600 uppercase tracking-widest group-hover:text-white transition-colors">{label}</span>
+        )}
+      </div>
     </div>
   );
 }
 
 export default function UploadPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#01060b] flex items-center justify-center font-mono text-[10px] uppercase tracking-[10px] animate-pulse text-cyan-400">Syncing...</div>}>
+    <Suspense fallback={<div className="min-h-screen bg-[#f8fafc] flex items-center justify-center font-medium text-slate-500 text-sm">Loading...</div>}>
       <UploadPageContent />
     </Suspense>
   );
