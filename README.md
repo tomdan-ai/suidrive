@@ -137,11 +137,12 @@ Anyone can paste a Walrus blob ID and receive a verification report:
 | Layer | Technology |
 | --- | --- |
 | Frontend | Next.js 16.2 (App Router, Turbopack), React 19, Tailwind 4 |
-| Wallet | `@mysten/dapp-kit`, `@mysten/sui` |
+| Auth | Google zkLogin (Sui zkLogin primitive) + Wallet Connect (`@mysten/dapp-kit`) |
 | Storage | Walrus testnet (publisher + aggregator HTTP API) |
 | Smart contracts | Move 2024.beta on Sui |
 | AI | NVIDIA NIM (`nvidia/nemotron-3-super-120b-a12b`), OpenRouter free tier fallback |
-| Sui RPC | Tatum-managed gateway (configurable) |
+| Gas | Sponsored transactions — deployer wallet pays gas for all users |
+| Sui RPC | `@mysten/sui` JSON-RPC client (testnet fullnode) |
 | Language | TypeScript 5 |
 
 ---
@@ -450,7 +451,62 @@ suidrive/
 | 7 | File sharing (public links + wallet-based access) | ✅ |
 | 8 | Exportable proof certificates (PDF/JSON) | ✅ |
 | 9 | AI Assistant (natural language file search) | ✅ |
-| 10 | Mainnet deploy | ☐ |
+| 10 | Google zkLogin + Wallet Connect (dual auth) | ✅ |
+| 11 | Sponsored transactions (free gas for all users) | ✅ |
+| 12 | Server-side signing (no wallet popups) | ✅ |
+| 13 | Mainnet deploy | ☐ |
+
+---
+
+## Known Limitations & Future Work
+
+We built SuiDrive as a hackathon prototype demonstrating what's possible with Sui + Walrus + zkLogin. Below are the limitations we've identified and our planned solutions:
+
+### Storage & Scalability
+
+| Limitation | Impact | Planned Solution |
+| --- | --- | --- |
+| Walrus testnet has no uptime SLA | Occasional SSL/connectivity issues | Migrate to Walrus mainnet |
+| Vercel body limit (~4.5MB free, 50MB pro) | Large file uploads fail | Direct-to-Walrus uploads from client, or chunked upload via dedicated server |
+| Dashboard fetches all objects via RPC | Slow at 1000+ files | Off-chain index (Postgres/Supabase) synced from on-chain events |
+| Linear storage cost growth | Doesn't scale with free tier | Tiered pricing: free quota → paid plans → enterprise |
+
+### Security & Access Control
+
+| Limitation | Impact | Planned Solution |
+| --- | --- | --- |
+| Single sponsor key signs all transactions | Single point of failure | Multisig sponsor wallet (native Sui multisig) |
+| No rate limiting on `/api/chain` | Abuse potential | Per-user rate limits + API key quotas |
+| Blob IDs are public on Walrus | Anyone with ID can fetch unencrypted files | Access-controlled proxy + optional encryption (already supported) |
+| Object `owner` field = sponsor address | On-chain attribution shows sponsor, not user | Contract upgrade: pass user address as argument, or query by Sui object ownership (transfer already implemented) |
+
+### UX & Auth
+
+| Limitation | Impact | Planned Solution |
+| --- | --- | --- |
+| zkLogin proof expires each epoch (~24h) | Users must re-authenticate daily | Silent background refresh (Google remembers consent) |
+| No file deletion | Blobs persist until epoch expiry | "Soft delete" from user index; use short epoch counts for temp files |
+| No folder/organization system | Flat file list | Virtual folders via metadata tags |
+| No collaborative editing | Single-owner files | Shared objects with role-based access control in Move |
+
+### Infrastructure
+
+| Limitation | Impact | Planned Solution |
+| --- | --- | --- |
+| AI analysis requires API keys | Cost at scale | Self-hosted model or token-based billing |
+| No monitoring/alerting | Silent failures | Sponsor balance alerts, Walrus health checks, error tracking (Sentry) |
+| Testnet state can be wiped | Data loss | Mainnet deployment with proper backup strategy |
+
+---
+
+## What We'd Build Next (Post-Hackathon)
+
+1. **Contract upgrade** — Add user address as a parameter to `create_file`/`create_version` so the `owner` field correctly reflects the uploader, not the sponsor
+2. **Off-chain index** — Event-driven Postgres sync for fast queries, search, and pagination
+3. **Walrus mainnet migration** — Production-grade storage with real availability guarantees
+4. **Tiered access** — Free tier with quotas, paid tier via Sui token payments
+5. **Mobile-responsive UI** — Current UI is desktop-optimized
+6. **Collaborative features** — Shared folders, team workspaces, multi-signer access control
 
 ---
 

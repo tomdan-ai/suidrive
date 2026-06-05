@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * Create a File object on-chain
+ * Create a File object on-chain, then transfer to the user
  */
 async function handleCreateFile(body: {
   fileId: string;
@@ -88,6 +88,7 @@ async function handleCreateFile(body: {
   const sponsor = getSponsorKeypair();
   const tx = new Transaction();
 
+  // Create the file object (will be owned by sponsor initially)
   tx.moveCall({
     target: `${PACKAGE_ID}::file_object::create_file`,
     arguments: [
@@ -97,27 +98,82 @@ async function handleCreateFile(body: {
     ],
   });
 
-  // Sponsor is both sender and gas payer
-  tx.setSender(sponsor.toSuiAddress());
+  // The created object is the first result of the move call
+  // Transfer it to the actual user
+  // Note: public_transfer requires the object from the transaction result
+  // We use transferObjects which works on any object with 'store' ability
+  const [fileObj] = tx.moveCall({
+    target: `${PACKAGE_ID}::file_object::create_file`,
+    arguments: [
+      tx.pure.string(fileId),
+      tx.pure.string(name),
+      tx.pure.string(mimeType),
+    ],
+  });
 
-  const builtBytes = await tx.build({ client: suiClient });
-  const { signature } = await sponsor.signTransaction(builtBytes);
+  // Actually, the contract already does transfer::public_transfer to sender.
+  // Since sender = sponsor, we need a different approach:
+  // We'll execute the create, then in a follow-up the sponsor transfers to user.
+  // But we can't split a PTB's internal transfer...
+  //
+  // Better approach: just execute create_file (objects go to sponsor),
+  // then the result will include the created object IDs,
+  // and we do a second transaction to transfer them.
 
-  const result = await suiClient.executeTransactionBlock({
-    transactionBlock: builtBytes,
-    signature,
+  // Reset and do it properly
+  const createTx = new Transaction();
+  createTx.moveCall({
+    target: `${PACKAGE_ID}::file_object::create_file`,
+    arguments: [
+      createTx.pure.string(fileId),
+      createTx.pure.string(name),
+      createTx.pure.string(mimeType),
+    ],
+  });
+  createTx.setSender(sponsor.toSuiAddress());
+
+  const createBytes = await createTx.build({ client: suiClient });
+  const { signature: createSig } = await sponsor.signTransaction(createBytes);
+
+  const createResult = await suiClient.executeTransactionBlock({
+    transactionBlock: createBytes,
+    signature: createSig,
     options: { showEffects: true, showObjectChanges: true },
   });
 
+  // Find the created object ID
+  const createdObj = createResult.objectChanges?.find(
+    (c: any) => c.type === 'created' && c.objectType?.includes('file_object::FileObject')
+  );
+
+  if (createdObj && ownerAddress !== sponsor.toSuiAddress()) {
+    // Transfer the object to the actual user
+    const transferTx = new Transaction();
+    transferTx.transferObjects(
+      [transferTx.object((createdObj as any).objectId)],
+      transferTx.pure.address(ownerAddress)
+    );
+    transferTx.setSender(sponsor.toSuiAddress());
+
+    const transferBytes = await transferTx.build({ client: suiClient });
+    const { signature: transferSig } = await sponsor.signTransaction(transferBytes);
+
+    await suiClient.executeTransactionBlock({
+      transactionBlock: transferBytes,
+      signature: transferSig,
+      options: { showEffects: true },
+    });
+  }
+
   return NextResponse.json({
-    digest: result.digest,
-    effects: result.effects,
-    objectChanges: result.objectChanges,
+    digest: createResult.digest,
+    effects: createResult.effects,
+    objectChanges: createResult.objectChanges,
   });
 }
 
 /**
- * Create a Version object on-chain
+ * Create a Version object on-chain, then transfer to the user
  */
 async function handleCreateVersion(body: {
   versionId: string;
@@ -138,39 +194,61 @@ async function handleCreateVersion(body: {
   }
 
   const sponsor = getSponsorKeypair();
-  const tx = new Transaction();
 
+  // Step 1: Create version object
+  const createTx = new Transaction();
   const prevVersionArg = previousVersion
-    ? tx.pure.option('string', previousVersion)
-    : tx.pure.option('string', null);
+    ? createTx.pure.option('string', previousVersion)
+    : createTx.pure.option('string', null);
 
-  tx.moveCall({
+  createTx.moveCall({
     target: `${PACKAGE_ID}::version_object::create_version`,
     arguments: [
-      tx.pure.string(versionId),
-      tx.pure.string(fileId),
-      tx.pure.string(walrusBlobId),
+      createTx.pure.string(versionId),
+      createTx.pure.string(fileId),
+      createTx.pure.string(walrusBlobId),
       prevVersionArg,
-      tx.pure.string(aiSummary || ''),
-      tx.pure.u64(size),
+      createTx.pure.string(aiSummary || ''),
+      createTx.pure.u64(size),
     ],
   });
+  createTx.setSender(sponsor.toSuiAddress());
 
-  // Sponsor is both sender and gas payer
-  tx.setSender(sponsor.toSuiAddress());
+  const createBytes = await createTx.build({ client: suiClient });
+  const { signature: createSig } = await sponsor.signTransaction(createBytes);
 
-  const builtBytes = await tx.build({ client: suiClient });
-  const { signature } = await sponsor.signTransaction(builtBytes);
-
-  const result = await suiClient.executeTransactionBlock({
-    transactionBlock: builtBytes,
-    signature,
+  const createResult = await suiClient.executeTransactionBlock({
+    transactionBlock: createBytes,
+    signature: createSig,
     options: { showEffects: true, showObjectChanges: true },
   });
 
+  // Step 2: Transfer to user
+  const createdObj = createResult.objectChanges?.find(
+    (c: any) => c.type === 'created' && c.objectType?.includes('version_object::VersionObject')
+  );
+
+  if (createdObj && ownerAddress !== sponsor.toSuiAddress()) {
+    const transferTx = new Transaction();
+    transferTx.transferObjects(
+      [transferTx.object((createdObj as any).objectId)],
+      transferTx.pure.address(ownerAddress)
+    );
+    transferTx.setSender(sponsor.toSuiAddress());
+
+    const transferBytes = await transferTx.build({ client: suiClient });
+    const { signature: transferSig } = await sponsor.signTransaction(transferBytes);
+
+    await suiClient.executeTransactionBlock({
+      transactionBlock: transferBytes,
+      signature: transferSig,
+      options: { showEffects: true },
+    });
+  }
+
   return NextResponse.json({
-    digest: result.digest,
-    effects: result.effects,
-    objectChanges: result.objectChanges,
+    digest: createResult.digest,
+    effects: createResult.effects,
+    objectChanges: createResult.objectChanges,
   });
 }
