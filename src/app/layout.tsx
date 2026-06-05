@@ -18,6 +18,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "SuiDrive - Immutable File History Protocol",
   description: "Preserve permanent, verifiable file history on Walrus + Sui",
+  icons: {
+    icon: '/suidrive.png',
+    apple: '/suidrive.png',
+  },
 };
 
 export default function RootLayout({
