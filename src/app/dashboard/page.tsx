@@ -2,13 +2,14 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useZkLogin } from '@/contexts/ZkLoginProvider';
 import { AuthOptions } from '@/components/AuthButton';
 import { formatDate, formatBytes } from '@/lib/utils';
 import type { FileObject } from '@/types';
 import {
   ShieldCheck, MoreVertical, FileText as FileIcon, Clock, Image as ImageIcon,
-  FileArchive, FileVideo, HardDrive
+  FileArchive, FileVideo, HardDrive, Layers, Database, Wifi
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 
@@ -106,77 +107,77 @@ export default function DashboardPage() {
     <DashboardLayout>
       <div className="p-6 lg:p-8 max-w-7xl mx-auto">
         <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <h1 className="text-2xl font-medium text-slate-800">My Drive</h1>
-          
-          {/* Quick Filters / View Options (Decorative for now to match Drive feel) */}
+          <h1 className="text-2xl font-bold text-white">My Drive</h1>
+
           <div className="flex items-center gap-3">
-             <select
-               value={sortBy}
-               onChange={(e) => setSortBy(e.target.value as any)}
-               className="bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 outline-none hover:bg-slate-50 transition-colors shadow-sm"
-             >
-               <option value="newest">Last modified</option>
-               <option value="name">Name</option>
-               <option value="versions">Versions</option>
-             </select>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as any)}
+              className="bg-white/5 border border-white/10 rounded-xl px-3 py-1.5 text-sm font-medium text-white/60 outline-none hover:bg-white/10 transition-colors cursor-pointer"
+            >
+              <option value="newest">Last modified</option>
+              <option value="name">Name</option>
+              <option value="versions">Versions</option>
+            </select>
           </div>
         </div>
 
         {!address ? (
-          <div className="bg-white border border-slate-200 rounded-2xl p-12 flex flex-col items-center justify-center text-center shadow-sm h-[60vh]">
-            <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-6">
-              <ShieldCheck size={32} className="text-blue-600" />
+          <div className="glass-panel rounded-2xl p-12 flex flex-col items-center justify-center text-center h-[60vh]">
+            <div className="w-20 h-20 bg-cyan-500/10 rounded-2xl flex items-center justify-center mb-6 border border-cyan-500/20 animate-glow">
+              <Image src="/Walrus_🦭_idzOnVzcF1_0.png" alt="Walrus" width={40} height={40} className="rounded-lg" />
             </div>
-            <h2 className="text-2xl font-medium text-slate-800 mb-2">Sign in to your Drive</h2>
-            <p className="text-slate-500 mb-8 max-w-sm">Connect a wallet or sign in with Google to access your permanent decentralized storage.</p>
+            <h2 className="text-2xl font-bold text-white mb-2">Sign in to your Drive</h2>
+            <p className="text-white/40 mb-8 max-w-sm">Connect a wallet or sign in with Google to access your permanent decentralized storage.</p>
             <AuthOptions />
           </div>
         ) : loading ? (
           <div className="h-[60vh] flex flex-col items-center justify-center">
-            <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4" />
-            <p className="text-slate-500 text-sm font-medium">Syncing files...</p>
+            <div className="w-10 h-10 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mb-4" />
+            <p className="text-white/40 text-sm font-medium">Syncing from Walrus...</p>
           </div>
         ) : (
           <>
             {/* STATS STRIP */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-              <StatCard label="Files" value={files.length} />
-              <StatCard label="Storage Used" value={formatBytes(totalStorage)} />
-              <StatCard label="Total Versions" value={totalVersions} />
-              <StatCard label="Network" value="Sui Mainnet" icon={<ShieldCheck size={16} className="text-green-500" />} />
+              <StatCard label="Files" value={files.length} icon={<Database size={16} className="text-cyan-400" />} />
+              <StatCard label="Storage Used" value={formatBytes(totalStorage)} icon={<HardDrive size={16} className="text-blue-400" />} />
+              <StatCard label="Total Versions" value={totalVersions} icon={<Layers size={16} className="text-purple-400" />} />
+              <StatCard label="Network" value="Sui Testnet" icon={<Wifi size={16} className="text-emerald-400" />} />
             </div>
 
-            {/* FOLDERS / SUGGESTED (mock layout to feel like Drive) */}
-            <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">Suggested</h2>
+            {/* SUGGESTED */}
+            <h2 className="text-xs font-semibold text-white/30 uppercase tracking-widest mb-4">Suggested</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
               {filteredFiles.slice(0, 4).map(file => (
                 <SuggestedCard key={file.fileId} file={file} />
               ))}
               {filteredFiles.length === 0 && (
-                <div className="col-span-full text-center py-8 text-slate-500 text-sm bg-white border border-dashed border-slate-300 rounded-xl">
+                <div className="col-span-full text-center py-12 text-white/30 text-sm glass-panel rounded-xl border border-dashed border-white/10">
+                  <Image src="/Walrus_🦭_idzOnVzcF1_0.png" alt="Walrus" width={48} height={48} className="mx-auto mb-3 opacity-30 rounded-lg" />
                   No files yet. Upload a file to get started.
                 </div>
               )}
             </div>
 
             {/* FILE LIST */}
-            <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">Files</h2>
-            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-              <div className="grid grid-cols-12 gap-4 px-6 py-3 border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-500">
+            <h2 className="text-xs font-semibold text-white/30 uppercase tracking-widest mb-4">Files</h2>
+            <div className="glass-panel rounded-xl overflow-hidden">
+              <div className="grid grid-cols-12 gap-4 px-6 py-3 border-b border-white/5 text-xs font-semibold text-white/30 uppercase tracking-wider">
                 <div className="col-span-6 md:col-span-5">Name</div>
                 <div className="col-span-3 hidden md:block">Owner</div>
                 <div className="col-span-4 md:col-span-2">Last modified</div>
                 <div className="col-span-2 text-right">File size</div>
               </div>
-              
-              <div className="divide-y divide-slate-100">
+
+              <div className="divide-y divide-white/5">
                 {filteredFiles.map(file => (
                   <FileListItem key={file.fileId} file={file} />
                 ))}
                 {filteredFiles.length === 0 && (
-                   <div className="p-8 text-center text-sm text-slate-500">
-                     Your drive is empty
-                   </div>
+                  <div className="p-8 text-center text-sm text-white/30">
+                    Your drive is empty
+                  </div>
                 )}
               </div>
             </div>
@@ -189,35 +190,35 @@ export default function DashboardPage() {
 
 function StatCard({ label, value, icon }: any) {
   return (
-    <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm flex flex-col gap-1">
-      <div className="text-xs font-medium text-slate-500 flex justify-between items-center">
+    <div className="glass-panel glass-panel-hover rounded-xl p-4 flex flex-col gap-1">
+      <div className="text-xs font-medium text-white/40 flex justify-between items-center">
         {label}
         {icon}
       </div>
-      <div className="text-xl font-semibold text-slate-800">{value}</div>
+      <div className="text-xl font-bold text-white">{value}</div>
     </div>
   );
 }
 
 function SuggestedCard({ file }: { file: DashboardFile }) {
   const getIcon = (mime: string, size: number = 40) => {
-    if (mime.includes('image')) return <ImageIcon size={size} className="text-blue-500" />;
-    if (mime.includes('zip') || mime.includes('archive')) return <FileArchive size={size} className="text-amber-500" />;
-    if (mime.includes('video')) return <FileVideo size={size} className="text-red-500" />;
-    return <FileIcon size={size} className="text-blue-600" />;
+    if (mime.includes('image')) return <ImageIcon size={size} className="text-cyan-400" />;
+    if (mime.includes('zip') || mime.includes('archive')) return <FileArchive size={size} className="text-amber-400" />;
+    if (mime.includes('video')) return <FileVideo size={size} className="text-rose-400" />;
+    return <FileIcon size={size} className="text-blue-400" />;
   };
 
   return (
-    <Link href={`/files/${file.objectId}`} className="bg-white border border-slate-200 hover:border-blue-400 hover:shadow-md transition-all rounded-xl p-4 flex flex-col group">
-      <div className="flex-1 flex items-center justify-center py-6 bg-slate-50 rounded-lg mb-3 group-hover:bg-blue-50/50 transition-colors">
+    <Link href={`/files/${file.objectId}`} className="glass-panel glass-panel-hover rounded-xl p-4 flex flex-col group">
+      <div className="flex-1 flex items-center justify-center py-6 bg-white/[0.02] rounded-lg mb-3 group-hover:bg-cyan-500/5 transition-colors border border-white/5">
         {getIcon(file.mimeType || '')}
       </div>
       <div className="flex items-start gap-2">
-         {getIcon(file.mimeType || '', 16)}
-         <div className="flex-1 min-w-0">
-           <p className="text-sm font-medium text-slate-800 truncate">{file.name || 'Untitled'}</p>
-           <p className="text-xs text-slate-500 truncate">You opened just now</p>
-         </div>
+        {getIcon(file.mimeType || '', 16)}
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-white/80 truncate group-hover:text-cyan-400 transition-colors">{file.name || 'Untitled'}</p>
+          <p className="text-xs text-white/30 truncate">{file.versionCount || 0} versions</p>
+        </div>
       </div>
     </Link>
   );
@@ -225,28 +226,28 @@ function SuggestedCard({ file }: { file: DashboardFile }) {
 
 function FileListItem({ file }: { file: DashboardFile }) {
   const getIcon = (mime: string) => {
-    if (mime.includes('image')) return <ImageIcon size={20} className="text-blue-500" />;
-    if (mime.includes('zip') || mime.includes('archive')) return <FileArchive size={20} className="text-amber-500" />;
-    if (mime.includes('video')) return <FileVideo size={20} className="text-red-500" />;
-    return <FileIcon size={20} className="text-blue-600" />;
+    if (mime.includes('image')) return <ImageIcon size={20} className="text-cyan-400" />;
+    if (mime.includes('zip') || mime.includes('archive')) return <FileArchive size={20} className="text-amber-400" />;
+    if (mime.includes('video')) return <FileVideo size={20} className="text-rose-400" />;
+    return <FileIcon size={20} className="text-blue-400" />;
   };
 
   return (
-    <Link href={`/files/${file.objectId}`} className="grid grid-cols-12 gap-4 px-6 py-3 items-center hover:bg-slate-50 transition-colors group cursor-pointer">
+    <Link href={`/files/${file.objectId}`} className="grid grid-cols-12 gap-4 px-6 py-3 items-center hover:bg-white/[0.03] transition-colors group cursor-pointer">
       <div className="col-span-6 md:col-span-5 flex items-center gap-3 min-w-0">
         {getIcon(file.mimeType || '')}
-        <span className="text-sm font-medium text-slate-800 truncate group-hover:text-blue-600 transition-colors">{file.name || 'Untitled'}</span>
+        <span className="text-sm font-medium text-white/70 truncate group-hover:text-cyan-400 transition-colors">{file.name || 'Untitled'}</span>
       </div>
-      <div className="col-span-3 hidden md:flex items-center gap-2 text-sm text-slate-600 truncate">
-        <div className="w-5 h-5 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 text-[10px] shrink-0">me</div>
+      <div className="col-span-3 hidden md:flex items-center gap-2 text-sm text-white/40 truncate">
+        <div className="w-5 h-5 bg-cyan-500/10 rounded-full flex items-center justify-center text-cyan-400 text-[10px] shrink-0">me</div>
         <span className="truncate">me</span>
       </div>
-      <div className="col-span-4 md:col-span-2 text-sm text-slate-600 truncate">
+      <div className="col-span-4 md:col-span-2 text-sm text-white/40 truncate">
         {formatDate(file.createdAt)}
       </div>
-      <div className="col-span-2 flex items-center justify-end gap-4 text-sm text-slate-600">
+      <div className="col-span-2 flex items-center justify-end gap-4 text-sm text-white/40">
         <span className="truncate">{formatBytes(file.totalSize || 0)}</span>
-        <button className="opacity-0 group-hover:opacity-100 p-1 hover:bg-slate-200 rounded text-slate-500 transition-all shrink-0">
+        <button className="opacity-0 group-hover:opacity-100 p-1 hover:bg-white/10 rounded text-white/40 transition-all shrink-0">
           <MoreVertical size={16} />
         </button>
       </div>

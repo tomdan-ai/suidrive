@@ -8,6 +8,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useZkLogin } from '@/contexts/ZkLoginProvider';
 
 const PACKAGE_ID = process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || '';
@@ -39,8 +40,34 @@ export function AssistantWidget() {
   const [loading, setLoading] = useState(false);
   const [fileContext, setFileContext] = useState<FileContext[]>([]);
   const [contextLoaded, setContextLoaded] = useState(false);
+  const [showPopup, setShowPopup] = useState(false);
+  const [popupDismissed, setPopupDismissed] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Show welcome popup after page loads
+  useEffect(() => {
+    if (popupDismissed) return;
+    const timer = setTimeout(() => {
+      setShowPopup(true);
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [popupDismissed]);
+
+  const handleDismissPopup = () => {
+    setShowPopup(false);
+    setPopupDismissed(true);
+  };
+
+  const handleChatNow = () => {
+    setShowPopup(false);
+    setPopupDismissed(true);
+    setOpen(true);
+    setMessages([{
+      role: 'assistant',
+      content: "Hey! I'm **Delta**. I know everything about SuiDrive — your files, versions, encryption, blockchain proofs, you name it. What can I help you with?"
+    }]);
+  };
 
   // Load file context when widget opens and wallet is connected
   useEffect(() => {
@@ -157,17 +184,53 @@ export function AssistantWidget() {
 
   return (
     <>
+      {/* ===== WELCOME POPUP MODAL ===== */}
+      {showPopup && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 animate-in fade-in duration-300">
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={handleDismissPopup} />
+
+          {/* Modal */}
+          <div className="relative bg-[#0c1222] border border-white/10 rounded-3xl p-8 max-w-sm w-full shadow-2xl shadow-black/50 text-center animate-in zoom-in-95 duration-300">
+            {/* Delta Avatar */}
+            <div className="mb-5">
+              <Image src="/bot.png" alt="Delta" width={80} height={80} className="rounded-full mx-auto drop-shadow-[0_0_20px_rgba(0,207,255,0.2)]" />
+            </div>
+
+            {/* Welcome Text */}
+            <h3 className="text-xl font-bold text-white mb-2">Hey, I&apos;m Delta</h3>
+            <p className="text-sm text-white/50 leading-relaxed mb-6">
+              Your personal assistant for everything SuiDrive. I can help you find files, explain features, or just chat.
+            </p>
+
+            {/* CTAs */}
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={handleChatNow}
+                className="w-full btn-watery py-3 px-6 rounded-xl font-semibold text-sm text-white"
+              >
+                Chat Now
+              </button>
+              <button
+                onClick={handleDismissPopup}
+                className="w-full py-3 px-6 rounded-xl font-semibold text-sm text-white/50 hover:text-white/80 hover:bg-white/5 transition-all"
+              >
+                Maybe Later
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Chat Panel */}
       {open && (
         <div className="fixed bottom-20 right-6 z-[100] w-[380px] max-w-[calc(100vw-2rem)] h-[500px] max-h-[70vh] bg-[#0a0f1a] border border-white/10 rounded-2xl shadow-2xl shadow-black/50 flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 fade-in duration-200">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 bg-[#070c15]">
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 bg-gradient-to-br from-purple-500 to-blue-600 rounded-lg flex items-center justify-center text-sm">
-                🤖
-              </div>
+              <Image src="/bot.png" alt="Delta" width={28} height={28} className="rounded-full" />
               <div>
-                <span className="text-sm font-bold text-white">SuiDrive AI</span>
+                <span className="text-sm font-bold text-white">Delta</span>
                 {contextLoaded && (
                   <span className="ml-2 text-[9px] bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded-full">
                     {fileContext.length} files
@@ -190,8 +253,8 @@ export function AssistantWidget() {
             {messages.map((msg, i) => (
               <div key={i} className={`flex gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 {msg.role === 'assistant' && (
-                  <div className="w-6 h-6 bg-gradient-to-br from-purple-500 to-blue-600 rounded-full flex items-center justify-center text-[10px] shrink-0 mt-0.5">
-                    🤖
+                  <div className="w-6 h-6 shrink-0 mt-0.5">
+                    <Image src="/bot.png" alt="Delta" width={24} height={24} className="rounded-full" />
                   </div>
                 )}
                 <div className={`max-w-[80%] px-3 py-2 rounded-xl text-xs leading-relaxed ${
@@ -205,8 +268,8 @@ export function AssistantWidget() {
             ))}
             {loading && (
               <div className="flex gap-2 items-start">
-                <div className="w-6 h-6 bg-gradient-to-br from-purple-500 to-blue-600 rounded-full flex items-center justify-center text-[10px] shrink-0">
-                  🤖
+                <div className="w-6 h-6 shrink-0">
+                  <Image src="/bot.png" alt="Delta" width={24} height={24} className="rounded-full" />
                 </div>
                 <div className="bg-white/5 rounded-xl rounded-bl-sm px-3 py-2 border border-white/5">
                   <div className="flex gap-1">
@@ -250,15 +313,15 @@ export function AssistantWidget() {
         onClick={() => setOpen(!open)}
         className={`fixed bottom-6 right-6 z-[100] w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-all duration-200 ${
           open
-            ? 'bg-gray-700 hover:bg-gray-600 rotate-0'
-            : 'bg-gradient-to-br from-purple-600 to-blue-600 hover:scale-110 shadow-[0_0_30px_rgba(147,51,234,0.4)]'
+            ? 'bg-gray-700 hover:bg-gray-600'
+            : 'bg-[#0a1220] border border-white/10 hover:scale-110 hover:border-cyan-500/30 shadow-[0_0_20px_rgba(0,0,0,0.5)]'
         }`}
-        title="SuiDrive AI Assistant"
+        title="Delta — AI Assistant"
       >
         {open ? (
           <span className="text-white text-xl">×</span>
         ) : (
-          <span className="text-2xl">🤖</span>
+          <Image src="/bot.png" alt="Delta" width={36} height={36} className="rounded-full" />
         )}
       </button>
     </>

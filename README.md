@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="public/suidrive.png" width="150" alt="SuiDrive Logo" />
+
 # SuiDrive
 
 **Immutable File History Protocol on Sui + Walrus**
@@ -11,6 +13,8 @@ Permanent, verifiable version history for any file — anchored on the Sui block
 [![Next.js](https://img.shields.io/badge/Next.js-16.2-black?logo=next.js)](https://nextjs.org)
 [![Move](https://img.shields.io/badge/Move-2024.beta-orange)](https://move-language.github.io/move/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
+**100% Open Source and Community Driven**
 
 </div>
 
@@ -48,6 +52,18 @@ The protocol layers in NVIDIA Nemotron 120B for AI-generated summaries and versi
 - **Decentralized**: no central server holds the canonical copy of your file
 - **Auditable**: full version history with AI summaries, viewable by anyone given a blob ID
 - **Permissionless**: anyone can verify a blob's authenticity through the public verification portal
+
+---
+
+## Core Technologies
+
+SuiDrive relies on two foundational technologies to power decentralized, highly-scalable storage and secure blockchain integration:
+
+### 🦭 Walrus Protocol
+**Walrus** is a decentralized storage network developed by Mysten Labs. SuiDrive uses Walrus to store files of any size as content-addressed, erasure-coded blobs on the testnet. This guarantees high availability, durability, and cost-efficient storage for files, media, and raw bytes.
+
+### 🚀 Tatum
+**Tatum** serves as the high-availability RPC gateway provider for our Sui blockchain interactions. By utilizing Tatum's robust node infrastructure, SuiDrive handles real-time smart contract queries, transaction broadcasting, and on-chain event listening with enterprise-grade reliability and low latency.
 
 ---
 

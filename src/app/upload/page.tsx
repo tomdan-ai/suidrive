@@ -14,6 +14,7 @@ import {
   ChevronLeft, Loader2, Sparkles, Database, Lock, LockOpen, ArrowLeft
 } from 'lucide-react';
 import Link from 'next/link';
+import Image from 'next/image';
 
 function UploadPageContent() {
   // --- BOSS'S LOGIC START ---
@@ -163,58 +164,63 @@ function UploadPageContent() {
   // --- BOSS'S LOGIC END ---
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-slate-900 font-sans flex flex-col items-center pt-8 px-4 pb-20">
-      
-      <div className="w-full max-w-2xl mb-6">
-        <button 
-          onClick={() => router.back()} 
-          className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors font-medium text-sm w-fit"
+    <div className="min-h-screen bg-[#02060f] text-white font-sans flex flex-col items-center pt-8 px-4 pb-20 relative">
+      {/* Ambient background */}
+      <div className="fixed inset-0 pointer-events-none z-0">
+        <div className="absolute top-[20%] left-[30%] w-[500px] h-[500px] rounded-full bg-[radial-gradient(circle,rgba(0,180,216,0.06)_0%,transparent_65%)] animate-watery-1" />
+        <div className="absolute bottom-[10%] right-[10%] w-[400px] h-[400px] rounded-full bg-[radial-gradient(circle,rgba(0,119,182,0.05)_0%,transparent_65%)] animate-watery-2" />
+      </div>
+
+      <div className="w-full max-w-2xl mb-6 relative z-10">
+        <button
+          onClick={() => router.back()}
+          className="flex items-center gap-2 text-white/40 hover:text-white transition-colors font-medium text-sm w-fit"
         >
           <ArrowLeft size={16} />
           Back
         </button>
       </div>
 
-      <div className="w-full max-w-2xl bg-white border border-slate-200 rounded-2xl shadow-sm p-8 md:p-12">
+      <div className="w-full max-w-2xl glass-panel rounded-2xl p-8 md:p-12 relative z-10">
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold text-slate-800 mb-2">
+          <h1 className="text-2xl font-bold text-white mb-2">
             {existingFileId ? "Upload New Version" : "Upload to Drive"}
           </h1>
-          <p className="text-slate-500 text-sm">
+          <p className="text-white/40 text-sm">
             {existingFileId ? `Appending Version ${versionNumber}` : "Files are stored permanently on Walrus"}
           </p>
         </div>
 
         {!address ? (
           <div className="flex flex-col items-center justify-center text-center py-8">
-             <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-6">
-               <ShieldCheck size={32} className="text-blue-600" />
-             </div>
-             <h3 className="text-xl font-semibold text-slate-800 mb-2">Sign in Required</h3>
-             <p className="text-slate-500 text-sm mb-8">Please sign in to upload files.</p>
-             <AuthOptions />
+            <div className="w-16 h-16 bg-cyan-500/10 rounded-2xl flex items-center justify-center mb-6 border border-cyan-500/20 animate-glow">
+              <ShieldCheck size={32} className="text-cyan-400" />
+            </div>
+            <h3 className="text-xl font-semibold text-white mb-2">Sign in Required</h3>
+            <p className="text-white/40 text-sm mb-8">Please sign in to upload files.</p>
+            <AuthOptions />
           </div>
         ) : (
           <div className="space-y-6">
-            
+
             {/* DROPZONE */}
             <div className="relative">
               <input type="file" onChange={handleFileChange} className="hidden" id="file-input" disabled={uploading} />
               <label htmlFor="file-input" className="block cursor-pointer">
-                <div className={`border-2 border-dashed rounded-xl p-10 flex flex-col items-center justify-center transition-colors ${file ? 'border-blue-400 bg-blue-50' : 'border-slate-300 hover:border-blue-400 hover:bg-slate-50 bg-white'}`}>
+                <div className={`border-2 border-dashed rounded-xl p-10 flex flex-col items-center justify-center transition-all ${file ? 'border-cyan-500/40 bg-cyan-500/5' : 'border-white/10 hover:border-cyan-500/30 hover:bg-white/[0.02] bg-transparent'}`}>
                   {file ? (
                     <div className="text-center">
-                      <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                        <FileCheck className="text-blue-600" size={24} />
+                      <div className="w-12 h-12 bg-cyan-500/10 rounded-full flex items-center justify-center mx-auto mb-3 border border-cyan-500/20">
+                        <FileCheck className="text-cyan-400" size={24} />
                       </div>
-                      <p className="text-slate-800 font-medium truncate max-w-xs mx-auto">{file.name}</p>
-                      <p className="text-sm text-slate-500 mt-1">{(file.size / 1024).toFixed(2)} KB</p>
+                      <p className="text-white font-medium truncate max-w-xs mx-auto">{file.name}</p>
+                      <p className="text-sm text-white/40 mt-1">{(file.size / 1024).toFixed(2)} KB</p>
                     </div>
                   ) : (
                     <div className="text-center">
-                      <Cloud size={40} className="text-slate-400 mx-auto mb-3" />
-                      <p className="text-slate-700 font-medium mb-1">Click or drag file to this area to upload</p>
-                      <p className="text-sm text-slate-500">Supports single file upload</p>
+                      <Cloud size={40} className="text-white/20 mx-auto mb-3" />
+                      <p className="text-white/70 font-medium mb-1">Click or drag file to this area to upload</p>
+                      <p className="text-sm text-white/30">Supports single file upload</p>
                     </div>
                   )}
                 </div>
@@ -222,20 +228,20 @@ function UploadPageContent() {
             </div>
 
             {/* ENCRYPTION TOGGLE */}
-            <label className="flex items-center gap-3 p-4 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors select-none">
-              <input 
-                type="checkbox" 
+            <label className="flex items-center gap-3 p-4 glass-panel rounded-xl cursor-pointer hover:bg-white/[0.04] transition-all select-none">
+              <input
+                type="checkbox"
                 checked={encryptionEnabled}
                 onChange={(e) => setEncryptionEnabled(e.target.checked)}
                 disabled={uploading}
-                className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                className="w-4 h-4 text-cyan-500 rounded border-white/20 bg-white/5 focus:ring-cyan-500"
               />
               <div className="flex-1">
-                <p className="text-sm font-medium text-slate-800 flex items-center gap-2">
-                  <Lock size={14} className={encryptionEnabled ? "text-blue-600" : "text-slate-400"} />
+                <p className="text-sm font-medium text-white/80 flex items-center gap-2">
+                  <Lock size={14} className={encryptionEnabled ? "text-cyan-400" : "text-white/30"} />
                   Encrypt file before upload
                 </p>
-                <p className="text-xs text-slate-500 mt-1">Your file will be encrypted using your wallet address. Only you can decrypt it.</p>
+                <p className="text-xs text-white/30 mt-1">Your file will be encrypted using your wallet address. Only you can decrypt it.</p>
               </div>
             </label>
 
@@ -243,10 +249,10 @@ function UploadPageContent() {
             <button
               onClick={handleUpload}
               disabled={!file || uploading || !!result}
-              className={`w-full py-3.5 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2 ${
+              className={`w-full py-3.5 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 ${
                 !file || uploading || !!result
-                ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                : 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm'
+                ? 'bg-white/5 text-white/20 cursor-not-allowed border border-white/5'
+                : 'btn-watery text-white'
               }`}
             >
               {uploading ? <><Loader2 className="animate-spin" size={18} /> Uploading...</> : <><Cloud size={18} /> Upload File</>}
@@ -254,38 +260,42 @@ function UploadPageContent() {
 
             {/* PROGRESS BAR */}
             {progress && !result && (
-              <div className="mt-6 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+              <div className="mt-6 p-4 glass-panel rounded-xl">
                 <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm font-medium text-slate-700">{progress.stage === 'uploading' ? 'Uploading' : 'Processing'}</span>
-                  <span className="text-sm font-medium text-blue-600">{progress.progress}%</span>
+                  <span className="text-sm font-medium text-white/70">{progress.stage === 'uploading' ? 'Uploading' : 'Processing'}</span>
+                  <span className="text-sm font-bold text-cyan-400">{progress.progress}%</span>
                 </div>
-                <div className="h-2 w-full bg-slate-200 rounded-full overflow-hidden mb-3">
-                  <div className="h-full bg-blue-600 transition-all duration-300" style={{ width: `${progress.progress}%` }} />
+                <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden mb-3">
+                  <div className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-500 rounded-full" style={{ width: `${progress.progress}%` }} />
                 </div>
-                <p className="text-xs text-slate-500">{progress.message}</p>
+                <p className="text-xs text-white/40">{progress.message}</p>
               </div>
             )}
 
             {/* SUCCESS STATE */}
             {result && (
-              <div className="mt-6 p-5 bg-green-50 border border-green-200 rounded-xl animate-in fade-in slide-in-from-bottom-4">
-                <div className="flex items-center gap-2 text-green-700 font-semibold mb-3">
-                  <ShieldCheck size={20} />
-                  Upload Successful
-                </div>
-                
-                <div className="space-y-2 mb-4 text-xs text-slate-600 font-mono bg-white p-3 rounded border border-green-100">
-                   <p className="flex justify-between"><span className="text-slate-400">Blob ID:</span> <span className="truncate ml-4">{result.blobId}</span></p>
-                   <p className="flex justify-between"><span className="text-slate-400">Sui TX:</span> <span className="truncate ml-4">{result.transactionDigest}</span></p>
-                </div>
+              <div className="mt-6 p-5 glass-panel rounded-xl border-emerald-500/20 animate-in fade-in slide-in-from-bottom-4 relative overflow-hidden">
+                {/* Success glow */}
+                <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent" />
+                <div className="relative z-10">
+                  <div className="flex items-center gap-2 text-emerald-400 font-bold mb-3">
+                    <ShieldCheck size={20} />
+                    Upload Successful
+                  </div>
 
-                <div className="flex gap-3">
-                  <Link href={`/files/${result.objectId || result.fileId}`} className="flex-1 text-center py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors">
-                    View File
-                  </Link>
-                  <Link href="/dashboard" className="flex-1 text-center py-2 bg-white border border-green-200 text-green-700 hover:bg-green-50 rounded-lg text-sm font-medium transition-colors">
-                    Back to Drive
-                  </Link>
+                  <div className="space-y-2 mb-4 text-xs text-white/50 font-mono bg-white/[0.03] p-3 rounded-lg border border-white/5">
+                    <p className="flex justify-between"><span className="text-white/30">Blob ID:</span> <span className="truncate ml-4">{result.blobId}</span></p>
+                    <p className="flex justify-between"><span className="text-white/30">Sui TX:</span> <span className="truncate ml-4">{result.transactionDigest}</span></p>
+                  </div>
+
+                  <div className="flex gap-3">
+                    <Link href={`/files/${result.objectId || result.fileId}`} className="flex-1 text-center py-2 btn-watery rounded-lg text-sm font-semibold text-white">
+                      View File
+                    </Link>
+                    <Link href="/dashboard" className="flex-1 text-center py-2 bg-white/5 border border-white/10 text-white/60 hover:bg-white/10 rounded-lg text-sm font-medium transition-colors">
+                      Back to Drive
+                    </Link>
+                  </div>
                 </div>
               </div>
             )}
@@ -299,7 +309,7 @@ function UploadPageContent() {
 
 export default function UploadPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#f8fafc] flex items-center justify-center font-medium text-slate-500 text-sm">Loading...</div>}>
+    <Suspense fallback={<div className="min-h-screen bg-[#02060f] flex items-center justify-center font-medium text-white/40 text-sm">Loading...</div>}>
       <UploadPageContent />
     </Suspense>
   );
