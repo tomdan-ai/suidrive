@@ -4,7 +4,6 @@ import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useZkLogin } from '@/contexts/ZkLoginProvider';
 import { AuthOptions } from '@/components/AuthButton';
-import { suiClientEnhanced } from '@/lib/sui/client';
 import { walrusClient } from '@/lib/walrus/client';
 import { encryptFile } from '@/lib/crypto/encryption';
 import { generateFileId, generateVersionId, readFileAsText } from '@/lib/utils';
@@ -18,7 +17,7 @@ import Link from 'next/link';
 
 function UploadPageContent() {
   // --- BOSS'S LOGIC START ---
-  const { account, address, signAndExecuteTransaction } = useZkLogin();
+  const { account, address } = useZkLogin();
   const searchParams = useSearchParams();
   const router = useRouter();
  
@@ -96,10 +95,21 @@ function UploadPageContent() {
 
       if (!isNewVersion) {
         setProgress({ stage: 'blockchain', progress: 70, message: 'Creating File Record on Sui...' });
-        const fileTx = suiClientEnhanced.createFileTransaction(fileId, file.name, file.type);
-        await new Promise<void>((res, rej) => {
-          signAndExecuteTransaction({ transaction: fileTx, onSuccess: () => res(), onError: (e) => rej(e) });
+        const fileRes = await fetch('/api/chain', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'createFile',
+            fileId,
+            name: file.name,
+            mimeType: file.type,
+            ownerAddress: address,
+          }),
         });
+        if (!fileRes.ok) {
+          const err = await fileRes.json().catch(() => ({}));
+          throw new Error(err.error || 'Failed to create file on-chain');
+        }
       }
 
       setProgress({ stage: 'blockchain', progress: 85, message: 'Finalizing Version on Sui...' });
@@ -107,14 +117,26 @@ function UploadPageContent() {
         ? `${aiSummary} [enc:salt=${encryptionSalt}]`
         : aiSummary;
 
-      const versionTx = suiClientEnhanced.createVersionTransaction(versionId, fileId, blobId, null, summaryWithMeta, file.size);
-      let txDigest = '';
-      await new Promise<void>((res, rej) => {
-        signAndExecuteTransaction({ transaction: versionTx,
-          onSuccess: (r) => { txDigest = r.digest; res(); },
-          onError: (e) => rej(e)
-        });
+      const versionRes = await fetch('/api/chain', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'createVersion',
+          versionId,
+          fileId,
+          walrusBlobId: blobId,
+          previousVersion: null,
+          aiSummary: summaryWithMeta,
+          size: file.size,
+          ownerAddress: address,
+        }),
       });
+      if (!versionRes.ok) {
+        const err = await versionRes.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to create version on-chain');
+      }
+      const versionData = await versionRes.json();
+      const txDigest = versionData.digest || '';
 
       setProgress({ stage: 'complete', progress: 100, message: 'Upload complete!' });
       setResult({
