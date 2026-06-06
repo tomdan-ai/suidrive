@@ -42,10 +42,18 @@ export function useFileHistory(fileObjectId: string) {
         }
 
         const fields = fileObject.data.content.fields as any;
+        
+        // Get actual on-chain owner (who the object was transferred to)
+        // This differs from fields.owner which is the transaction sender (sponsor)
+        let actualOwner = fields.owner;
+        if (fileObject.data.owner && typeof fileObject.data.owner === 'object' && 'AddressOwner' in fileObject.data.owner) {
+          actualOwner = fileObject.data.owner.AddressOwner;
+        }
+
         const file: FileObject = {
           objectId: fileObject.data.objectId,
           fileId: fields.file_id,
-          owner: fields.owner,
+          owner: actualOwner,
           latestVersion: parseInt(fields.latest_version),
           createdAt: parseInt(fields.created_at),
           name: fields.name,
@@ -53,9 +61,9 @@ export function useFileHistory(fileObjectId: string) {
         };
 
         // Get all version objects for this file
-        // Query owned objects by the file owner
+        // Query owned objects by the actual on-chain owner
         const ownedObjects = await client.getOwnedObjects({
-          owner: file.owner,
+          owner: actualOwner,
           filter: {
             StructType: `${PACKAGE_ID}::version_object::VersionObject`,
           },

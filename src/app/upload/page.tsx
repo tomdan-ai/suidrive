@@ -94,6 +94,8 @@ function UploadPageContent() {
         }
       } catch (e) { console.warn('AI failed', e); }
 
+      let createdFileObjectId = existingObjectId || '';
+
       if (!isNewVersion) {
         setProgress({ stage: 'blockchain', progress: 70, message: 'Creating File Record on Sui...' });
         const fileRes = await fetch('/api/chain', {
@@ -110,6 +112,14 @@ function UploadPageContent() {
         if (!fileRes.ok) {
           const err = await fileRes.json().catch(() => ({}));
           throw new Error(err.error || 'Failed to create file on-chain');
+        }
+        const fileData = await fileRes.json();
+        // Extract the created FileObject ID from objectChanges
+        const fileObj = fileData.objectChanges?.find(
+          (c: any) => c.type === 'created' && c.objectType?.includes('file_object::FileObject')
+        );
+        if (fileObj) {
+          createdFileObjectId = fileObj.objectId;
         }
       }
 
@@ -141,7 +151,7 @@ function UploadPageContent() {
 
       setProgress({ stage: 'complete', progress: 100, message: 'Upload complete!' });
       setResult({
-        success: true, fileId, objectId: existingObjectId, versionId, blobId,
+        success: true, fileId, objectId: createdFileObjectId || existingObjectId, versionId, blobId,
         transactionDigest: txDigest, aiSummary, isNewVersion, versionNumber,
         encrypted: encryptionEnabled, encryptionSalt,
       });
