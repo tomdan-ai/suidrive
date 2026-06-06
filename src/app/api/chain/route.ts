@@ -42,7 +42,15 @@ export async function POST(request: NextRequest) {
 
     if (!PACKAGE_ID) {
       return NextResponse.json(
-        { error: 'SUI_PACKAGE_ID not configured' },
+        { error: 'SUI_PACKAGE_ID not configured. Set NEXT_PUBLIC_SUI_PACKAGE_ID env var.' },
+        { status: 500 }
+      );
+    }
+
+    // Validate sponsor key exists before proceeding
+    if (!process.env.SUI_SPONSOR_SECRET_KEY) {
+      return NextResponse.json(
+        { error: 'SUI_SPONSOR_SECRET_KEY not configured. Add it to environment variables.' },
         { status: 500 }
       );
     }
