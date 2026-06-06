@@ -75,14 +75,17 @@ export function AssistantWidget() {
 
     async function loadContext() {
       try {
+        // Query sponsor's objects (all files are owned by sponsor)
+        const queryOwner = process.env.NEXT_PUBLIC_SUI_SPONSOR_ADDRESS || address!;
+        
         const fileObjects = await client.getOwnedObjects({
-          owner: address!,
+          owner: queryOwner,
           filter: { StructType: `${PACKAGE_ID}::file_object::FileObject` },
           options: { showContent: true },
         });
 
         const versionObjects = await client.getOwnedObjects({
-          owner: address!,
+          owner: queryOwner,
           filter: { StructType: `${PACKAGE_ID}::version_object::VersionObject` },
           options: { showContent: true },
         });
