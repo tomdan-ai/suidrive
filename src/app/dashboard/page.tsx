@@ -14,6 +14,7 @@ import {
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 
 const PACKAGE_ID = process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || '';
+const SPONSOR_ADDRESS = process.env.NEXT_PUBLIC_SUI_SPONSOR_ADDRESS || process.env.SUI_DEPLOYER_ADDRESS || '';
 
 interface DashboardFile extends FileObject {
   totalSize?: number;
@@ -35,14 +36,17 @@ export default function DashboardPage() {
       if (!address) return;
       setLoading(true);
       try {
+        // Objects are owned by the sponsor wallet — query sponsor's objects
+        const queryOwner = SPONSOR_ADDRESS || address;
+        
         const fileObjects = await client.getOwnedObjects({
-          owner: address,
+          owner: queryOwner,
           filter: { StructType: `${PACKAGE_ID}::file_object::FileObject` },
           options: { showContent: true },
         });
 
         const versionObjects = await client.getOwnedObjects({
-          owner: address,
+          owner: queryOwner,
           filter: { StructType: `${PACKAGE_ID}::version_object::VersionObject` },
           options: { showContent: true },
         });
